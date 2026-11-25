@@ -42,7 +42,7 @@ def parse_opening(text):
     ) from None
 
 
-def parse_text(text):
+def parse_text(text, *, allow_empty_courses=False):
   config = {"refresh_seconds": 15, "window_minutes": 20, "courses": []}
   seen, course = set(), None
   for number, line in enumerate(text.splitlines(), 1):
@@ -88,7 +88,7 @@ def parse_text(text):
         )
     except StopRun as error:
       raise StopRun(f"Preferences line {number}: {error}") from None
-  return validate_config(config)
+  return validate_config(config, allow_empty_courses=allow_empty_courses)
 
 
 def dump_text(config):

@@ -27,6 +27,7 @@ from .files import (
 )
 from .portal import URL, Site
 from .preferences import configure
+from .suggestions import describe_schedule, suggest
 
 LOG = logging.getLogger("academy")
 HANOI = ZoneInfo("Asia/Ho_Chi_Minh")
@@ -142,13 +143,24 @@ async def _run_browser(args, config):
       try:
         page = await browser.new_page()
         page.set_default_timeout(10000)
-        site = Site(page, config, args.headless)
+        # Suggestions use the whole list, independent of configured course IDs.
+        site_config = {**config, "courses": []} if args.suggest else config
+        site = Site(page, site_config, args.headless)
         site.stage = "opening the registration page on the portal"
         await page.goto(URL, wait_until="domcontentloaded", timeout=45000)
         await site.ready()
         await site.snapshot()
         snapshot = await site.refresh("registered")
         courses, registered, raw = snapshot
+        if args.suggest:
+          snapshot = await site.refresh("open")
+          raw = snapshot[2]
+          schedule = suggest(raw, args.suggest, include=args.include, exclude=args.exclude)
+          text = describe_schedule(schedule, raw, args.suggest)
+          console(text.rstrip())
+          atomic_write(args.evidence_dir / "suggested-schedule.txt", text)
+          await capture(args.evidence_dir, site, "schedule_suggested", snapshot, catalog=True)
+          return
         pending = journal.data.get("pending")
         if pending:
           if pending not in {code + "/" + group for code, group in registered}:
@@ -192,6 +204,27 @@ def main(argv=None):
     ("submit", "Wait for registration to open, then submit your plan."),
   ):
     modes.add_argument("--" + flag, action="store_true", help=help_text)
+  modes.add_argument(
+    "--suggest",
+    choices=("days", "fatigue"),
+    help="Suggest a timetable from every available subject without submitting anything.",
+  )
+  parser.add_argument(
+    "--include",
+    action="extend",
+    nargs="+",
+    default=[],
+    metavar="CODE",
+    help="Only suggest these subject codes. Use with --suggest.",
+  )
+  parser.add_argument(
+    "--exclude",
+    action="extend",
+    nargs="+",
+    default=[],
+    metavar="CODE",
+    help="Never suggest these subject codes. Takes precedence over --include.",
+  )
   parser.add_argument(
     "--headless",
     action="store_true",
@@ -205,6 +238,8 @@ def main(argv=None):
     help="Save each run's private evidence here. Defaults to reports.",
   )
   args = parser.parse_args(argv)
+  if (args.include or args.exclude) and not args.suggest:
+    parser.error("--include and --exclude require --suggest")
   handler = logging.StreamHandler()
   handler.setFormatter(
     PlainFormatter("%(asctime)sZ %(levelname)s %(message)s", datefmt="%Y-%m-%dT%H:%M:%S")
@@ -229,7 +264,7 @@ def main(argv=None):
       create_config(args.config)
       console("Starter file saved. Fill in your student ID, semester, opening time, and courses.")
       return 0
-    config = load_config(args.config)
+    config = load_config(args.config, allow_empty_courses=bool(args.suggest))
     if args.check_config:
       console(f"Settings look good. {len(config['courses'])} courses. Opens {config['opening']}.")
     elif args.demo:

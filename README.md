@@ -85,6 +85,29 @@ Each browser run prints the path to its own private folder under `reports/`. Use
 
 These files can contain student info. Keep them private. Log timestamps are in UTC, and the opening time is also shown in Hanoi time.
 
+## Suggest a schedule
+
+```sh
+academy-register --suggest days
+academy-register --suggest fatigue
+```
+
+Both commands read all enabled groups with seats in the portal's current course list, even if they aren't in your preferences. They keep existing selections fixed and fit as many different subjects as possible before optimising. They print the groups and teaching dates and save the same proposal as `suggested-schedule.txt` in the run folder. Nothing is submitted. You can leave the course list empty in your settings for these commands. The tool still needs the account, semester, and opening settings to check the portal and use the right run folder.
+
+- `days` minimises actual days at school across the term. Fatigue breaks ties.
+- `fatigue` adds up skipped sessions and blocks of three consecutive periods. Sessions are periods 1–3, 4–6, 7–9, and so on. An empty session counts only if there are classes before and after it that day. A six-period stretch counts as four overlapping blocks of three, so longer stretches cost more. Fewer gaps, a shorter longest stretch, and fewer school days break ties, in that order.
+
+To limit what gets suggested, pass subject codes from the portal:
+
+```sh
+academy-register --suggest days --include IE.014.02 IE.068.02
+academy-register --suggest fatigue --exclude IE.014.02 IE.068.02
+```
+
+You can repeat either flag or use both. An excluded subject stays out of the proposed additions even if it's also included. The filters match subject codes regardless of case and apply to all groups of that subject. Anything you've already selected stays in the timetable and still counts toward conflicts, school days, and fatigue.
+
+Teaching dates matter. A break between teaching blocks doesn't count as a school day, and two groups that meet on the same weekday and periods can fit if they meet on different dates. The proposal reflects current seat counts and the visible course list. The portal may still enforce credit limits or other rules. If the search hits its limit, the output says the result is the best it found so far.
+
 ## Register
 
 ```sh

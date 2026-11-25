@@ -146,7 +146,7 @@ def validate_group(group):
     seen.add(key)
 
 
-def validate_config(config):
+def validate_config(config, *, allow_empty_courses=False):
   """Check the plan the same way no matter how it was entered."""
   try:
     require(isinstance(config, dict), "Put your JSON settings inside a single object.")
@@ -169,7 +169,12 @@ def validate_config(config):
         type(config[field]) is int and config[field] >= minimum,
         f"{field} must be an integer of at least {minimum}.",
       )
-    require(isinstance(config["courses"], list) and config["courses"], "Add at least one course.")
+    if allow_empty_courses and "courses" not in config:
+      config = {**config, "courses": []}
+    require(
+      isinstance(config["courses"], list) and (allow_empty_courses or config["courses"]),
+      "Add at least one course.",
+    )
     codes = []
     for item in config["courses"]:
       require(identifier(item["code"]), "Enter course codes without slashes or control characters.")
@@ -191,7 +196,7 @@ def validate_config(config):
     ) from None
 
 
-def load_config(path):
+def load_config(path, *, allow_empty_courses=False):
   """Read text or JSON settings and keep private values out of errors."""
   path = Path(path)
   try:
@@ -210,10 +215,10 @@ def load_config(path):
   elif path.suffix.lower() == ".txt":
     from .preferences import parse_text
 
-    config = parse_text(text)
+    return parse_text(text, allow_empty_courses=allow_empty_courses)
   else:
     raise StopRun("Use a settings file ending in .txt or .json.")
-  return validate_config(config)
+  return validate_config(config, allow_empty_courses=allow_empty_courses)
 
 
 def option_slots(option):

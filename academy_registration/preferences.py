@@ -107,19 +107,28 @@ def dump_text(config, *, allow_empty_courses=False):
     f"Refresh: {config['refresh_seconds']} seconds",
     f"Window: {config['window_minutes']} minutes",
   ]
-  for course in config["courses"]:
+  if config["courses"]:
+    lines.extend(["", *course_lines(config["courses"])])
+  result = "\n".join(lines) + "\n"
+  if parse_text(result, allow_empty_courses=allow_empty_courses) != text_shape(config):
+    raise StopRun("One of these settings doesn't fit the text format. Save this plan as JSON.")
+  return result
+
+
+def course_lines(courses):
+  lines = []
+  for course in courses:
+    if lines:
+      lines.append("")
     name = " | " + course["name"] if course.get("name") else ""
-    lines += ["", "Course: " + course["code"] + name]
+    lines.append("Course: " + course["code"] + name)
     for index, group in enumerate(course["groups"]):
       label = "Last resort" if group.get("last_resort") else "Group" if index == 0 else "Fallback"
       schedule = ", ".join(
         f"{DAYS[day - 2]} {first}-{last}" for day, first, last in sorted(option_slots(group))
       )
       lines.append(f"{label}: {group['group']} | {schedule}")
-  result = "\n".join(lines) + "\n"
-  if parse_text(result, allow_empty_courses=allow_empty_courses) != text_shape(config):
-    raise StopRun("One of these settings doesn't fit the text format. Save this plan as JSON.")
-  return result
+  return lines
 
 
 def text_shape(config):

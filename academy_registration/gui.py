@@ -18,7 +18,7 @@ from .cli import hanoi_timezone
 from .core import StopRun, identifier, load_config, now
 from .files import atomic_write
 from .gui_support import BrowserJob, proposal_preferences, subject_codes, week_grid
-from .preferences import dump_text, parse_text
+from .preferences import course_lines, dump_text, parse_text
 from .startup import ensure_requirements
 from .suggestions import WEEKDAYS
 
@@ -185,6 +185,7 @@ class App:
     )
 
   def show_config(self, config):
+    body = dump_text(config, allow_empty_courses=True).partition("\n\n")[2]
     for key, name in (
       ("Student", "username"),
       ("Semester", "semester"),
@@ -193,10 +194,9 @@ class App:
       ("Window", "window_minutes"),
     ):
       self.values[key].set(config[name])
-    self.show_courses(config)
+    self.set_course_text(body)
 
-  def show_courses(self, config):
-    body = dump_text(config, allow_empty_courses=True).partition("\n\n")[2]
+  def set_course_text(self, body):
     self.courses.delete("1.0", "end")
     self.courses.insert("1.0", body)
 
@@ -345,19 +345,26 @@ class App:
   def use_suggestion(self):
     if self.job is not None or not self.suggestion:
       return
-    try:
-      config = self.config()
-      if config["courses"] and not messagebox.askyesno(
+    body = "\n".join(course_lines(self.suggestion["courses"]))
+    current = self.courses.get("1.0", "end-1c").strip()
+    has_choices = any(
+      line and not line.startswith("#") for line in map(str.strip, current.splitlines())
+    )
+    if current != body and has_choices:
+      if not messagebox.askyesno(
         "Replace course choices",
         "Replace the course choices in the editor with the suggested groups?",
         parent=self.root,
       ):
         return
-      self.show_courses({**config, "courses": self.suggestion})
-    except StopRun as error:
-      messagebox.showerror("Check your settings", str(error), parent=self.root)
-      return
-    self.status.set("Suggested groups copied. Review them before scheduling registration.")
+    self.set_course_text(body)
+    if not self.values["Semester"].get().strip() and self.suggestion["semester"]:
+      self.values["Semester"].set(self.suggestion["semester"])
+    self.courses.focus_set()
+    if self.values["Opens"].get().strip():
+      self.status.set("Suggested groups copied. Review them before scheduling registration.")
+    else:
+      self.status.set("Suggested groups copied. Enter the opening time before scheduling registration.")
 
   def drain_events(self):
     try:
@@ -388,7 +395,11 @@ class App:
     if suggestion is not None:
       fixed = suggestion.existing
       proposed = suggestion.additions
-      self.suggestion = proposal_preferences(proposed, raw)
+      self.suggestion = (
+        {"courses": proposal_preferences(proposed, raw), "semester": raw.get("semester")}
+        if proposed
+        else None
+      )
       summary = (
         f"{suggestion.days} school days · {suggestion.skipped_sessions} skipped sessions · "
         f"Longest stretch: {suggestion.longest_stretch} periods · "

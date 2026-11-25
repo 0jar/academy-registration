@@ -118,9 +118,18 @@ class DesktopGuiTests(unittest.TestCase):
   def test_preview_draws_the_grid_and_results_and_can_copy_the_group(self):
     from academy_registration.suggestions import Schedule
 
-    raw = {"open": [{"code": "A", "group": "1", "name": "Subject A"}], "registered": []}
+    self.app.values["Semester"].set("")
+    self.app.values["Opens"].set("")
+    raw = {
+      "open": [{"code": "A", "group": "1", "name": "Subject A"}],
+      "registered": [],
+      "semester": "Portal semester",
+    }
     suggestion = Schedule((), (COURSE,), 2, 0, 1, 3, True, ())
-    self.app.show_results(([], [], raw), (), suggestion)
+    self.app.set_running(True)
+    self.app.events.put(("result", (([], [], raw), (), suggestion)))
+    self.app.events.put(("finished", "Schedule ready."))
+    self.app.drain_events()
     cells = self.app.grid.item(self.app.grid.get_children()[0], "values")
     self.assertEqual(cells[:2], ("1", "A/1"))
     result = self.app.results.item(self.app.results.get_children()[0], "values")
@@ -128,8 +137,30 @@ class DesktopGuiTests(unittest.TestCase):
     self.app.week.current(1)
     self.app.draw_week()
     self.assertEqual(self.app.grid.item(self.app.grid.get_children()[3], "values")[2], "A/1")
-    self.app.use_suggestion()
-    self.assertEqual(self.app.config(require_courses=True)["courses"][0]["groups"][0]["group"], "1")
+    self.assertTrue(self.app.apply_button.instate(["!disabled"]))
+    self.app.apply_button.invoke()
+    self.assertIn("Enter the opening time", self.app.status.get())
+    self.assertEqual(self.app.values["Semester"].get(), "Portal semester")
+    self.assertEqual(self.app.values["Opens"].get(), "")
+    self.app.values["Opens"].set(SETTINGS["opening"])
+    config = self.app.config(require_courses=True)
+    self.assertEqual(config["courses"], gui_support.proposal_preferences([COURSE], raw))
+
+  def test_copy_requires_confirmation_to_replace_an_unfinished_course_draft(self):
+    from academy_registration.suggestions import Schedule
+
+    draft = "Course: unfinished\nGroup:"
+    self.app.set_course_text(draft)
+    raw = {"open": [], "registered": [], "semester": "Portal semester"}
+    self.app.show_results(([], [], raw), (), Schedule((), (COURSE,), 2, 0, 1, 3, True, ()))
+    self.app.set_running(False)
+    with patch.object(self.gui.messagebox, "askyesno", side_effect=[False, True]) as confirm:
+      self.app.apply_button.invoke()
+      self.assertEqual(self.app.courses.get("1.0", "end-1c"), draft)
+      self.app.apply_button.invoke()
+    self.assertEqual(confirm.call_count, 2)
+    self.assertEqual(self.app.config(require_courses=True)["courses"][0]["code"], "A")
+    self.assertEqual(self.app.values["Semester"].get(), SETTINGS["semester"])
 
   def test_password_field_is_masked_used_and_never_saved(self):
     self.assertEqual(self.app.password_entry.grid_info()["row"], 1)

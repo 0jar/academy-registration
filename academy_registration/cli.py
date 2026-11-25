@@ -119,11 +119,17 @@ async def run_browser(args, config):
       }
       write_json(args.evidence_dir / "failure.json", failure)
       result = args.evidence_dir / "result.json"
-      if json.loads(result.read_text(encoding="utf-8")).get("result") == "starting":
+      if json.loads(result.read_text(encoding="utf-8")).get("result") in ("starting", "login_verified"):
         write_json(result, failure)
     except Exception:
       LOG.warning("Couldn't save the failure report.")
     raise
+
+
+def publish_result(args, snapshot, *, planned=(), suggestion=None):
+  callback = getattr(args, "on_result", None)
+  if callback is not None:
+    callback(snapshot, planned, suggestion)
 
 
 async def _run_browser(args, config):
@@ -146,6 +152,9 @@ async def _run_browser(args, config):
         # Suggestions use the whole list, independent of configured course IDs.
         site_config = {**config, "courses": []} if args.suggest else config
         site = Site(page, site_config, args.headless)
+        password = getattr(args, "password", None)
+        if password is not None:
+          site.password = password
         site.stage = "opening the registration page on the portal"
         await page.goto(URL, wait_until="domcontentloaded", timeout=45000)
         await site.ready()
@@ -157,6 +166,7 @@ async def _run_browser(args, config):
           raw = snapshot[2]
           schedule = suggest(raw, args.suggest, include=args.include, exclude=args.exclude)
           text = describe_schedule(schedule, raw, args.suggest)
+          publish_result(args, snapshot, suggestion=schedule)
           console(text.rstrip())
           atomic_write(args.evidence_dir / "suggested-schedule.txt", text)
           await capture(args.evidence_dir, site, "schedule_suggested", snapshot, catalog=True)
@@ -174,6 +184,7 @@ async def _run_browser(args, config):
           await capture(args.evidence_dir, site, "catalog_verified", snapshot, catalog=True)
           return
         choices = choose(courses, registered, config, set(journal.data.get("blocked", [])))
+        publish_result(args, snapshot, planned=choices)
         print_plan(choices)
         print_status(courses, registered, raw, config, choices, journal.data.get("blocked", []))
         await capture(args.evidence_dir, site, "login_verified", snapshot)
@@ -181,6 +192,7 @@ async def _run_browser(args, config):
           LOG.info("Dry run done. No courses were selected or submitted.")
           return
         snapshot = await register(site, journal, opening)
+        publish_result(args, snapshot)
         await capture(args.evidence_dir, site, "registration_verified", snapshot)
       except Exception:
         if site:

@@ -91,8 +91,8 @@ def parse_text(text, *, allow_empty_courses=False):
   return validate_config(config, allow_empty_courses=allow_empty_courses)
 
 
-def dump_text(config):
-  validate_config(config)
+def dump_text(config, *, allow_empty_courses=False):
+  config = validate_config(config, allow_empty_courses=allow_empty_courses)
   opening = datetime.fromisoformat(config["opening"])
   readable = (
     opening.strftime("%Y-%m-%d %H:%M Hanoi")
@@ -117,7 +117,7 @@ def dump_text(config):
       )
       lines.append(f"{label}: {group['group']} | {schedule}")
   result = "\n".join(lines) + "\n"
-  if parse_text(result) != text_shape(config):
+  if parse_text(result, allow_empty_courses=allow_empty_courses) != text_shape(config):
     raise StopRun("One of these settings doesn't fit the text format. Save this plan as JSON.")
   return result
 
@@ -128,7 +128,7 @@ def text_shape(config):
   result["opening"] = datetime.fromisoformat(config["opening"]).isoformat()
   result["courses"] = [
     {
-      **course,
+      **{key: value for key, value in course.items() if key != "name" or value},
       "groups": [
         {
           "group": group["group"],

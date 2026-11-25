@@ -85,6 +85,20 @@ Each browser run prints the path to its own private folder under `reports/`. Use
 
 These files can contain student info. Keep them private. Log timestamps are in UTC, and the opening time is also shown in Hanoi time.
 
+## Desktop window
+
+After installing the tool, run this from the folder where you keep your settings:
+
+```sh
+academy-register-gui
+```
+
+From a source checkout you can also run `python -m academy_registration.gui`. The desktop window needs Tkinter. If your Python build doesn't include it, install Tk support for that Python. On Windows, the launcher is `.\.venv\Scripts\academy-register-gui.exe` if you're using the virtual environment above.
+
+Open a text or JSON settings file, or edit the student, semester, opening time, and course choices in the window. The GUI saves settings as text. Use **Suggest schedule** to apply the subject filters and view the results. Pick a week to see its timetable, including differences between teaching blocks. **Use suggested groups in settings** copies the suggested additions into the course editor for review.
+
+**Schedule registration** asks you to confirm your course list and the opening time in Hanoi. It uses the courses in the settings editor. Keep the window open and the computer awake until the run finishes. **Cancel run** stops the worker and closes its browser. If it already sent a submission, check the portal before retrying. The GUI shares the CLI's run journal when both start from the same folder. The run log shows where the evidence was saved. Enter your school password in the masked field below Student ID. The window clears the field when a run starts and keeps it out of saved settings. Leave it blank to use `ACADEMY_PASSWORD` if you've set it.
+
 ## Suggest a schedule
 
 ```sh

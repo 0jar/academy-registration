@@ -26,6 +26,8 @@ dev = ["ruff==0.17.6", "build==1.6.1"]
 
 [project.scripts]
 academy-register = "academy_registration.cli:main"
+[project.gui-scripts]
+academy-register-gui = "academy_registration.gui:main"
 
 [tool.setuptools.packages.find]
 include = ["academy_registration*"]

@@ -61,10 +61,11 @@ def private_directory(folder):
   return folder
 
 
-def atomic_write(path, content):
+def atomic_write(path, content, *, private_parent=True):
   """Write a private replacement before moving it into place."""
   path = Path(path)
-  private_directory(path.parent)
+  if private_parent:
+    private_directory(path.parent)
   data = content.encode("utf-8") if isinstance(content, str) else content
   if os.name == "nt":
     temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")

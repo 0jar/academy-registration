@@ -14,19 +14,20 @@ try:
 except ImportError:
   tk = None
 
-from .cli import hanoi_timezone
+from .cli import hanoi_opening
 from .core import StopRun, identifier, load_config, now
 from .files import atomic_write
 from .gui_i18n import LANGUAGES, Locale
 from .gui_support import BrowserJob, proposal_preferences, subject_codes, week_grid
-from .preferences import course_lines, dump_text, parse_text
+from .preferences import course_lines, dump_text, opening_fields, parse_text
 from .startup import ensure_requirements
 from .suggestions import WEEKDAYS
 
 SETTINGS = (
   ("Student", "Student ID", ""),
   ("Semester", "Semester", ""),
-  ("Opens", "Opening (Hanoi time)", ""),
+  ("Date", "Date (DD/MM/YYYY)", ""),
+  ("Time", "Time (Hanoi by default)", ""),
   ("Refresh", "Refresh seconds", "15"),
   ("Window", "Window minutes", "20"),
 )
@@ -249,7 +250,7 @@ class App:
         self.values[key] = value
       entry.grid(row=index, column=1, sticky="ew", padx=(8, 0), pady=3)
       self.inputs.append(entry)
-    self.widget(ttk.Label, frame, "Example opening: 2027-01-05 08:00 Hanoi").pack(
+    self.widget(ttk.Label, frame, "Example opening: 05/01/2027 at 08:00 Hanoi").pack(
       anchor="w", pady=(2, 8)
     )
 
@@ -351,14 +352,16 @@ class App:
 
   def show_config(self, config):
     body = dump_text(config, allow_empty_courses=True).partition("\n\n")[2]
+    date, clock = opening_fields(config["opening"])
     for key, name in (
       ("Student", "username"),
       ("Semester", "semester"),
-      ("Opens", "opening"),
       ("Refresh", "refresh_seconds"),
       ("Window", "window_minutes"),
     ):
       self.values[key].set(config[name])
+    self.values["Date"].set(date)
+    self.values["Time"].set(clock)
     self.set_course_text(body)
 
   def set_course_text(self, body):
@@ -447,7 +450,7 @@ class App:
       if now() >= opening + timedelta(minutes=config["window_minutes"]):
         self.show_error("Registration window ended", "Check the opening time in your settings.")
         return
-      when = opening.astimezone(hanoi_timezone()).strftime("%Y-%m-%d %H:%M:%S")
+      when = hanoi_opening(opening)
       targets = ", ".join(course["code"] for course in config["courses"])
       text = f"Register {targets} when the window opens at {when} Hanoi time?"
       if opening <= now():
@@ -521,13 +524,14 @@ class App:
     if not self.values["Semester"].get().strip() and self.suggestion["semester"]:
       self.values["Semester"].set(self.suggestion["semester"])
     self.courses.focus_set()
-    if self.values["Opens"].get().strip():
+    if all(self.values[key].get().strip() for key in ("Date", "Time")):
       self.set_message(
         self.status, "Suggested groups copied. Review them before scheduling registration."
       )
     else:
       self.set_message(
-        self.status, "Suggested groups copied. Enter the opening time before scheduling registration."
+        self.status,
+        "Suggested groups copied. Enter the opening date and time before scheduling registration.",
       )
 
   def drain_events(self):

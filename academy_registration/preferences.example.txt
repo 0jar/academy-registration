@@ -1,7 +1,8 @@
 # Put your groups in order of preference. Leave your password out of this file.
 Student: YOUR_STUDENT_ID
 Semester: Học kỳ 2 - Năm học 2026 - 2027
-Opens: 2026-11-25 08:00 Hanoi
+Date: 25/11/2026
+Time: 08:00
 Refresh: 15 seconds
 Window: 20 minutes
 

@@ -34,7 +34,8 @@ Here's what `preferences.txt` looks like.
 ```text
 Student: YOUR_STUDENT_ID
 Semester: Học kỳ 2 - Năm học 2026 - 2027
-Opens: 2027-01-01 08:00 Hanoi
+Date: 01/01/2027
+Time: 08:00
 Refresh: 15 seconds
 Window: 20 minutes
 
@@ -46,7 +47,7 @@ Course: IE.081.03 | Quản trị tài chính quốc tế
 Group: 1 | Monday 7-9, Tuesday 7-9
 ```
 
-Edit the dates and courses to match your semester. You can leave off the course name after `|`. Blank lines and lines starting with `#` are fine. Write days as `Monday`, `Mon`, `Thứ 2`, or `2`. Give the class periods as shown on the portal. If a group really is your last resort, mark it `Last resort:`. List groups in the order you want them.
+Use `DD/MM/YYYY` for the opening date and 24-hour time. Times use Hanoi time by default. You can add an offset, as in `08:00+02:00`. Existing text files with an `Opens` line and JSON plans with an ISO `opening` value still load. Edit the dates and courses to match your semester. You can leave off the course name after `|`. Blank lines and lines starting with `#` are fine. Write days as `Monday`, `Mon`, `Thứ 2`, or `2`. Give the class periods as shown on the portal. If a group really is your last resort, mark it `Last resort:`. List groups in the order you want them.
 
 ```sh
 academy-register --check-config

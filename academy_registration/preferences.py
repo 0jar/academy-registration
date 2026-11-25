@@ -1,7 +1,7 @@
 """Read text settings and ask the setup questions."""
 
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
 
 from .core import StopRun, identifier, option_slots, validate_config, validate_group
@@ -20,6 +20,7 @@ FIELDS = {
   "refresh": "refresh_seconds",
   "window": "window_minutes",
 }
+HANOI_OFFSET = timezone(timedelta(hours=7))
 
 
 def parse_slots(text):
@@ -42,8 +43,38 @@ def parse_opening(text):
     ) from None
 
 
+def parse_date(value):
+  try:
+    if re.fullmatch(r"[0-9]{2}/[0-9]{2}/[0-9]{4}", value):
+      return datetime.strptime(value, "%d/%m/%Y").date()
+  except ValueError:
+    pass
+  raise StopRun("Enter a valid date in DD/MM/YYYY format, like 05/01/2027.")
+
+
+def parse_time(value):
+  try:
+    if re.match(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]", value):
+      clock = time.fromisoformat(value)
+      return clock if clock.tzinfo is not None else clock.replace(tzinfo=HANOI_OFFSET)
+  except ValueError:
+    pass
+  raise StopRun("Enter the time in 24-hour format, like 08:00 (Hanoi time).")
+
+
+def opening_fields(value):
+  opening = datetime.fromisoformat(value)
+  date = f"{opening.day:02d}/{opening.month:02d}/{opening.year:04d}"
+  clock = opening.timetz()
+  if clock.utcoffset() == HANOI_OFFSET.utcoffset(None):
+    clock = clock.replace(tzinfo=None)
+  precision = "auto" if clock.microsecond else "seconds" if clock.second else "minutes"
+  return date, clock.isoformat(timespec=precision)
+
+
 def parse_text(text, *, allow_empty_courses=False):
   config = {"refresh_seconds": 15, "window_minutes": 20, "courses": []}
+  opening_parts = {}
   seen, course = set(), None
   for number, line in enumerate(text.splitlines(), 1):
     line = line.strip()
@@ -52,12 +83,17 @@ def parse_text(text, *, allow_empty_courses=False):
     label, separator, value = line.partition(":")
     label, value = label.strip().lower(), value.strip()
     try:
-      if not separator or not value:
+      if not separator or (not value and label not in {"date", "time"}):
         raise StopRun("Put the value after the label and colon. Blank lines and # comments are fine.")
-      if label in FIELDS:
+      if label in FIELDS or label in {"date", "time"}:
         if label in seen:
           raise StopRun("This setting is listed twice.")
         seen.add(label)
+        if "opens" in seen and ({"date", "time"} & seen):
+          raise StopRun("Use either Date and Time or the older Opens field.")
+        if label in {"date", "time"}:
+          opening_parts[label] = (parse_date if label == "date" else parse_time)(value)
+          continue
         if label in {"refresh", "window"}:
           unit = "seconds?" if label == "refresh" else "minutes?"
           match = re.fullmatch(r"(\d+)(?:\s+" + unit + r")?", value, re.I)
@@ -84,26 +120,26 @@ def parse_text(text, *, allow_empty_courses=False):
         course["groups"].append(option)
       else:
         raise StopRun(
-          "Unknown label. Use Student, Semester, Opens, Refresh, Window, Course, Group, Fallback, or Last resort."
+          "Unknown label. Use Student, Semester, Date, Time, Refresh, Window, Course, Group, Fallback, or Last resort."
         )
     except StopRun as error:
       raise StopRun(f"Preferences line {number}: {error}") from None
+  if opening_parts:
+    if len(opening_parts) != 2:
+      raise StopRun("Enter both Date and Time for registration to open.")
+    config["opening"] = datetime.combine(opening_parts["date"], opening_parts["time"]).isoformat()
   return validate_config(config, allow_empty_courses=allow_empty_courses)
 
 
 def dump_text(config, *, allow_empty_courses=False):
   config = validate_config(config, allow_empty_courses=allow_empty_courses)
-  opening = datetime.fromisoformat(config["opening"])
-  readable = (
-    opening.strftime("%Y-%m-%d %H:%M Hanoi")
-    if (opening.utcoffset() == timedelta(hours=7) and not opening.second and not opening.microsecond)
-    else opening.isoformat()
-  )
+  date, clock = opening_fields(config["opening"])
   lines = [
     "# Put your groups in order of preference. Leave your password out of this file.",
     f"Student: {config['username']}",
     f"Semester: {config['semester']}",
-    f"Opens: {readable}",
+    f"Date: {date}",
+    f"Time: {clock}",
     f"Refresh: {config['refresh_seconds']} seconds",
     f"Window: {config['window_minutes']} minutes",
   ]
@@ -186,18 +222,11 @@ def configure(path):
       "username": ask("Student ID", check=identifier),
       "semester": ask("Semester (copy it from the portal)"),
     }
-    day = ask(
-      "What date does registration open? (YYYY-MM-DD)",
-      check=lambda value: datetime.strptime(value, "%Y-%m-%d"),
+    day = parse_date(ask("What date does registration open? (DD/MM/YYYY)", check=parse_date))
+    hour = parse_time(ask("What time does registration open? (HH:MM, Hanoi time)", "08:00", parse_time))
+    config.update(
+      opening=datetime.combine(day, hour).isoformat(), refresh_seconds=15, window_minutes=20, courses=[]
     )
-    hour = ask(
-      "What time does it open in Hanoi? (HH:MM)",
-      "08:00",
-      lambda value: datetime.strptime(value, "%H:%M"),
-    )
-    day = datetime.strptime(day, "%Y-%m-%d").strftime("%Y-%m-%d")
-    hour = datetime.strptime(hour, "%H:%M").strftime("%H:%M")
-    config.update(opening=f"{day}T{hour}+07:00", refresh_seconds=15, window_minutes=20, courses=[])
     codes = set()
     while True:
       code = ask(

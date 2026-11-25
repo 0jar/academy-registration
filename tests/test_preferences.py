@@ -54,6 +54,28 @@ class TextPreferencesTests(unittest.TestCase):
       [{"day": 4, "periods": [10, 12]}, {"day": 5, "periods": [7, 9]}],
     )
 
+  def test_split_opening_round_trips_explicit_offset_and_seconds(self):
+    text = TEXT.replace(
+      "Opens: 2027-01-01 08:00 Hanoi", "Date: 25/11/2027\nTime: 03:30:15.123456+02:00"
+    )
+    config = preferences.parse_text(text)
+    self.assertEqual(config["opening"], "2027-11-25T03:30:15.123456+02:00")
+    self.assertIn("Date: 25/11/2027\nTime: 03:30:15.123456+02:00", preferences.dump_text(config))
+    self.assertEqual(preferences.parse_text(preferences.dump_text(config)), config)
+    self.assertIn("Date: 01/01/2027\nTime: 08:00", preferences.dump_text(preferences.parse_text(TEXT)))
+
+  def test_split_opening_rejects_invalid_or_ambiguous_fields(self):
+    for opening, message in (
+      ("Date: 2027-11-25\nTime: 08:00", "DD/MM/YYYY"),
+      ("Date: 31/02/2027\nTime: 08:00", "DD/MM/YYYY"),
+      ("Date: 25/11/2027\nTime: 24:00", "24-hour"),
+      ("Date: 25/11/2027", "both Date and Time"),
+      ("Date: 25/11/2027\nTime: 08:00\nOpens: 2027-01-01 08:00 Hanoi", "older Opens"),
+    ):
+      text = TEXT.replace("Opens: 2027-01-01 08:00 Hanoi", opening)
+      with self.subTest(opening=opening), self.assertRaisesRegex(core.StopRun, message):
+        preferences.parse_text(text)
+
   def test_weekday_names_abbreviations_and_portal_numbers(self):
     for label in ("Monday", "MON", "Thứ 2", "2"):
       self.assertEqual(preferences.parse_slots(label + " 7-9"), [{"day": 2, "periods": [7, 9]}])
@@ -102,8 +124,9 @@ class TextPreferencesTests(unittest.TestCase):
       Path("preferences.json").write_text(json.dumps(preferences.parse_text(TEXT)))
       with self.assertLogs("academy", level="ERROR"):
         self.assertEqual(cli.main(["--check-config"]), 2)
-      with patch("sys.stdout", new=io.StringIO()):
+      with patch("sys.stdout", new=io.StringIO()) as output:
         self.assertEqual(cli.main(["--check-config", "--config", "preferences.txt"]), 0)
+      self.assertIn("Opens 01/01/2027 08:00 Hanoi time", output.getvalue())
       browser.assert_not_called()
 
   def test_new_template_defaults_to_text(self):
@@ -123,7 +146,7 @@ class WizardTests(unittest.TestCase):
     return [
       "fixture",
       "Example semester",
-      "2027-1-1",
+      "01/01/2027",
       "",
       "IE.022.03",
       "1",
@@ -155,6 +178,7 @@ class WizardTests(unittest.TestCase):
       "fixture",
       "Example",
       "2027-01-01",
+      "01/01/2027",
       "08:00",
       "A",
       "1",

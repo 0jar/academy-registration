@@ -126,7 +126,8 @@ class DesktopGuiTests(unittest.TestCase):
     from academy_registration.suggestions import Schedule
 
     self.app.values["Semester"].set("")
-    self.app.values["Opens"].set("")
+    self.app.values["Date"].set("")
+    self.app.values["Time"].set("")
     raw = {
       "open": [{"code": "A", "group": "1", "name": "Subject A"}],
       "registered": [],
@@ -153,11 +154,14 @@ class DesktopGuiTests(unittest.TestCase):
     self.assertEqual(timetable.grid.grid_bbox(0, 2)[3], timetable.session_height)
     self.assertTrue(self.app.apply_button.instate(["!disabled"]))
     self.app.apply_button.invoke()
-    self.assertIn("Enter the opening time", self.app.status.get())
+    self.assertIn("Enter the opening date and time", self.app.status.get())
     self.assertEqual(self.app.values["Semester"].get(), "Portal semester")
-    self.assertEqual(self.app.values["Opens"].get(), "")
-    self.app.values["Opens"].set(SETTINGS["opening"])
+    self.assertEqual(self.app.values["Date"].get(), "")
+    self.assertEqual(self.app.values["Time"].get(), "")
+    self.app.values["Date"].set("05/01/2099")
+    self.app.values["Time"].set("08:00")
     config = self.app.config(require_courses=True)
+    self.assertEqual(config["opening"], SETTINGS["opening"])
     self.assertEqual(config["courses"], gui_support.proposal_preferences([COURSE], raw))
 
   def test_copy_requires_confirmation_to_replace_an_unfinished_course_draft(self):
@@ -234,7 +238,8 @@ class DesktopGuiTests(unittest.TestCase):
         self.app.save()
       self.assertNotIn("fixture-secret", path.read_text(encoding="utf-8"))
     self.app.values["Semester"].set("")
-    self.app.values["Opens"].set("")
+    self.app.values["Date"].set("")
+    self.app.values["Time"].set("")
     with (
       patch.dict(os.environ, {"ACADEMY_PASSWORD": "fallback"}),
       patch.object(self.gui, "BrowserJob") as worker,

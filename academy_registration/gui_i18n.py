@@ -11,10 +11,11 @@ VI = {
   "Student ID": "Mã sinh viên",
   "Password": "Mật khẩu",
   "Semester": "Học kỳ",
-  "Opening (Hanoi time)": "Giờ mở đăng ký (giờ Hà Nội)",
+  "Date (DD/MM/YYYY)": "Ngày mở (DD/MM/YYYY)",
+  "Time (Hanoi by default)": "Giờ mở (mặc định giờ Hà Nội)",
   "Refresh seconds": "Làm mới mỗi (giây)",
   "Window minutes": "Thời gian đăng ký (phút)",
-  "Example opening: 2027-01-05 08:00 Hanoi": "Ví dụ giờ mở đăng ký: 2027-01-05 08:00 Hanoi",
+  "Example opening: 05/01/2027 at 08:00 Hanoi": "Ví dụ: 05/01/2027 lúc 08:00 giờ Hà Nội",
   "Courses to register": "Học phần cần đăng ký",
   "Schedule filters": "Bộ lọc thời khóa biểu",
   "Fewest days": "Ít ngày đi học nhất",
@@ -84,8 +85,8 @@ VI = {
   "Suggested groups copied. Review them before scheduling registration.": (
     "Đã chép các nhóm được gợi ý. Kiểm tra lại trước khi hẹn giờ đăng ký."
   ),
-  "Suggested groups copied. Enter the opening time before scheduling registration.": (
-    "Đã chép các nhóm được gợi ý. Nhập giờ mở đăng ký trước khi hẹn giờ."
+  "Suggested groups copied. Enter the opening date and time before scheduling registration.": (
+    "Đã chép các nhóm được gợi ý. Nhập ngày và giờ mở đăng ký trước khi hẹn giờ."
   ),
   "{days} school days · {gaps} skipped sessions · Longest stretch: {longest} periods · {blocks} blocks of three": (
     "{days} ngày đi học · {gaps} ca trống giữa buổi · Liền mạch dài nhất: {longest} tiết · {blocks} lượt học 3 tiết liền"
@@ -157,8 +158,14 @@ VI = {
   "This setting is listed twice.": "Mục cài đặt này bị lặp.",
   "Add a Course line before listing its groups.": "Thêm dòng Course trước khi liệt kê các nhóm.",
   "Use Group: 2 | Friday 10-12.": "Nhập theo mẫu Group: 2 | Friday 10-12.",
-  "Unknown label. Use Student, Semester, Opens, Refresh, Window, Course, Group, Fallback, or Last resort.": (
-    "Nhãn không hợp lệ. Dùng Student, Semester, Opens, Refresh, Window, Course, Group, Fallback hoặc Last resort."
+  "Enter a valid date in DD/MM/YYYY format, like 05/01/2027.": (
+    "Nhập ngày hợp lệ theo định dạng DD/MM/YYYY, ví dụ 05/01/2027."
+  ),
+  "Enter the time in 24-hour format, like 08:00 (Hanoi time).": "Nhập giờ theo định dạng 24 giờ, ví dụ 08:00 (giờ Hà Nội).",
+  "Enter both Date and Time for registration to open.": "Nhập cả ngày và giờ mở đăng ký.",
+  "Use either Date and Time or the older Opens field.": "Dùng cặp Date và Time hoặc dùng trường Opens cũ.",
+  "Unknown label. Use Student, Semester, Date, Time, Refresh, Window, Course, Group, Fallback, or Last resort.": (
+    "Nhãn không hợp lệ. Dùng Student, Semester, Date, Time, Refresh, Window, Course, Group, Fallback hoặc Last resort."
   ),
   "One of these settings doesn't fit the text format. Save this plan as JSON.": (
     "Có mục cài đặt không lưu được ở dạng văn bản. Hãy lưu kế hoạch ở dạng JSON."

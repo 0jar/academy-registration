@@ -26,7 +26,7 @@ from .files import (
   write_json,
 )
 from .portal import URL, Site
-from .preferences import configure
+from .preferences import configure, opening_fields
 from .startup import ensure_requirements
 from .suggestions import describe_schedule, suggest
 
@@ -35,6 +35,10 @@ LOG = logging.getLogger("academy")
 
 def hanoi_timezone():
   return ZoneInfo("Asia/Ho_Chi_Minh")
+
+
+def hanoi_opening(opening):
+  return " ".join(opening_fields(opening.astimezone(hanoi_timezone()).isoformat()))
 
 
 async def capture(folder, site, result, snapshot=None, catalog=False):
@@ -61,7 +65,7 @@ async def register(site, journal, opening):
   end = opening + timedelta(minutes=config["window_minutes"])
   targets = {spec["code"] for spec in config["courses"]}
   checked_session, last_refresh = False, None
-  LOG.info("Ready to go at %s (Hanoi time).", opening.astimezone(hanoi_timezone()).isoformat())
+  LOG.info("Ready to go at %s (Hanoi time).", hanoi_opening(opening))
   while now() < end:
     current = now()
     check_at = opening - timedelta(minutes=5 if not checked_session else 1)
@@ -280,11 +284,14 @@ def main(argv=None):
       return 0
     if args.init_config:
       create_config(args.config)
-      console("Starter file saved. Fill in your student ID, semester, opening time, and courses.")
+      console(
+        "Starter file saved. Fill in your student ID, semester, opening date and time, and courses."
+      )
       return 0
     config = load_config(args.config, allow_empty_courses=bool(args.suggest))
     if args.check_config:
-      console(f"Settings look good. {len(config['courses'])} courses. Opens {config['opening']}.")
+      opening = hanoi_opening(datetime.fromisoformat(config["opening"]))
+      console(f"Settings look good. {len(config['courses'])} courses. Opens {opening} Hanoi time.")
     elif args.demo:
       console("Demo with sample seats. This runs offline.")
       print_plan(choose(demo_courses(config), [], config))

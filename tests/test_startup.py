@@ -83,7 +83,9 @@ class StartupTests(unittest.TestCase):
       launch.return_value.__enter__.return_value = process
       with self.assertRaises(subprocess.CalledProcessError):
         startup.install_with_progress([sys.executable, "-m", "pip"], messages.append)
-    self.assertEqual(messages, ["Finding packages...", "Downloading packages...", "Installing packages..."])
+    self.assertEqual(
+      messages, ["Finding packages...", "Downloading packages...", "Installing packages..."]
+    )
     self.assertEqual(launch.call_args.kwargs["stderr"], subprocess.STDOUT)
 
   def test_failed_install_is_shown_in_desktop_window(self):

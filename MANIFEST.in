@@ -1,0 +1,9 @@
+include LICENSE README.md SECURITY.md CONTRIBUTING.md requirements.txt academy_register.py
+recursive-include tests *.py
+include .github/workflows/tests.yml
+exclude preferences.json preferences.txt
+prune .academy-run
+prune reports
+prune dist
+prune build
+global-exclude *.pyc

@@ -1,0 +1,117 @@
+{
+  "username": "YOUR_STUDENT_ID",
+  "opening": "2026-11-25T08:00:00+07:00",
+  "semester": "Học kỳ 2 - Năm học 2026 - 2027",
+  "refresh_seconds": 15,
+  "window_minutes": 20,
+  "courses": [
+    {
+      "code": "IE.014.02",
+      "name": "Quản trị Kinh doanh",
+      "groups": [
+        {
+          "group": "2",
+          "days": [
+            6
+          ],
+          "periods": [
+            10,
+            12
+          ]
+        },
+        {
+          "group": "1",
+          "days": [
+            6
+          ],
+          "periods": [
+            7,
+            9
+          ]
+        }
+      ]
+    },
+    {
+      "code": "IE.068.02",
+      "name": "Kỹ năng viết báo cáo",
+      "groups": [
+        {
+          "group": "2",
+          "days": [
+            6
+          ],
+          "periods": [
+            7,
+            9
+          ]
+        },
+        {
+          "group": "4",
+          "days": [
+            6
+          ],
+          "periods": [
+            10,
+            12
+          ]
+        },
+        {
+          "group": "1",
+          "days": [
+            4
+          ],
+          "periods": [
+            7,
+            9
+          ],
+          "last_resort": true
+        },
+        {
+          "group": "3",
+          "days": [
+            4
+          ],
+          "periods": [
+            10,
+            12
+          ],
+          "last_resort": true
+        }
+      ]
+    },
+    {
+      "code": "IE.081.03",
+      "name": "Quản trị tài chính quốc tế",
+      "groups": [
+        {
+          "group": "1",
+          "days": [
+            2,
+            3
+          ],
+          "periods": [
+            7,
+            9
+          ]
+        }
+      ]
+    },
+    {
+      "code": "IE.087.03",
+      "name": "Phân tích và thẩm định dự án đầu tư quốc tế",
+      "groups": [
+        {
+          "group": "1",
+          "days": [
+            2,
+            3
+          ],
+          "periods": [
+            10,
+            12
+          ]
+        }
+      ]
+    }
+  ]
+}

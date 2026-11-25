@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "academy-registration"
+version = "0.3.1"
+description = "Check and register courses through the school portal from your terminal"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = [
+  "playwright==1.65.2",
+  "tzdata; sys_platform == 'win32'",
+  "pywin32>=306; sys_platform == 'win32'",
+]
+classifiers = [
+  "Operating System :: POSIX",
+  "Operating System :: MacOS :: MacOS X",
+  "Operating System :: Microsoft :: Windows",
+  "Programming Language :: Python :: 3",
+]
+
+[project.optional-dependencies]
+dev = ["ruff==0.17.6", "build==1.6.1"]
+
+[project.scripts]
+academy-register = "academy_registration.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["academy_registration*"]
+
+[tool.setuptools.package-data]
+academy_registration = ["preferences.example.json", "preferences.example.txt"]
+
+[tool.ruff]
+line-length = 104
+indent-width = 2
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]

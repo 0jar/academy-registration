@@ -1,0 +1,22 @@
+# Put your groups in order of preference. Leave your password out of this file.
+Student: YOUR_STUDENT_ID
+Semester: Học kỳ 2 - Năm học 2026 - 2027
+Opens: 2026-11-25 08:00 Hanoi
+Refresh: 15 seconds
+Window: 20 minutes
+
+Course: IE.014.02 | Quản trị Kinh doanh
+Group: 2 | Friday 10-12
+Fallback: 1 | Friday 7-9
+
+Course: IE.068.02 | Kỹ năng viết báo cáo
+Group: 2 | Friday 7-9
+Fallback: 4 | Friday 10-12
+Last resort: 1 | Wednesday 7-9
+Last resort: 3 | Wednesday 10-12
+
+Course: IE.081.03 | Quản trị tài chính quốc tế
+Group: 1 | Monday 7-9, Tuesday 7-9
+
+Course: IE.087.03 | Phân tích và thẩm định dự án đầu tư quốc tế
+Group: 1 | Monday 10-12, Tuesday 10-12

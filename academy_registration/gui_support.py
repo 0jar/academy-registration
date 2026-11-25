@@ -16,17 +16,20 @@ def subject_codes(text):
   return [code for code in re.split(r"[\s,]+", text.strip()) if code]
 
 
-def week_grid(courses):
-  """Map each Monday to rows of occupied periods for Monday through Saturday."""
+def week_grid(courses, names):
+  """Map each Monday to rows of three-period sessions."""
   weeks = {}
   for course in courses:
+    name = names.get((course.code, course.group))
+    label = f"{name} ({course.code})" if name else course.code
     for ordinal, mask in calendar(course).items():
       weekday = date.fromordinal(ordinal).weekday()
-      periods = weeks.setdefault(date.fromordinal(ordinal - weekday), {})
-      for i in range(mask.bit_length()):
-        if mask & (1 << i):
-          cells = periods.setdefault(i + 1, [[] for _ in range(6)])
-          cells[weekday].append(course.key)
+      sessions = weeks.setdefault(date.fromordinal(ordinal - weekday), {})
+      for offset in range(0, mask.bit_length(), 3):
+        if (mask >> offset) & 7:
+          cells = sessions.setdefault(offset // 3 + 1, [[] for _ in range(6)])
+          if label not in cells[weekday]:
+            cells[weekday].append(label)
   return dict(sorted(weeks.items()))
 
 

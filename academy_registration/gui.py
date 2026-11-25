@@ -45,6 +45,91 @@ def scrollable_tree(parent, columns, widths):
   return tree
 
 
+class Timetable:
+  def __init__(self, parent):
+    container = ttk.Frame(parent)
+    container.pack(fill="both", expand=True)
+    container.columnconfigure(0, weight=1)
+    container.rowconfigure(0, weight=1)
+    self.canvas = tk.Canvas(container, highlightthickness=0, takefocus=True)
+    self.canvas.grid(sticky="nsew")
+    for axis, row, column, sticky in (("x", 1, 0, "ew"), ("y", 0, 1, "ns")):
+      bar = ttk.Scrollbar(
+        container,
+        orient="horizontal" if axis == "x" else "vertical",
+        command=getattr(self.canvas, axis + "view"),
+      )
+      bar.grid(row=row, column=column, sticky=sticky)
+      self.canvas.configure(**{axis + "scrollcommand": bar.set})
+    self.grid = ttk.Frame(self.canvas)
+    self.window = self.canvas.create_window(0, 0, anchor="nw", window=self.grid)
+    self.day_width = 126
+    self.label_width = 108
+    period_height = ttk.Style(parent).lookup("Treeview", "rowheight") or 20
+    self.session_height = 3 * parent.winfo_pixels(period_height)
+    self.grid.columnconfigure(0, minsize=self.label_width)
+    for column in range(1, len(WEEKDAYS) + 1):
+      self.grid.columnconfigure(column, weight=1, uniform="days", minsize=self.day_width)
+    for column, title in enumerate(("Session", *WEEKDAYS)):
+      self.cell(0, column, title, heading=True)
+    self.grid.bind(
+      "<Configure>", lambda event: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+    )
+    self.canvas.bind("<Configure>", self.resize)
+    self.canvas.bind("<MouseWheel>", self.scroll)
+    self.canvas.bind("<Button-4>", self.scroll)
+    self.canvas.bind("<Button-5>", self.scroll)
+    for key, axis, direction in (
+      ("Up", "y", -1),
+      ("Down", "y", 1),
+      ("Left", "x", -1),
+      ("Right", "x", 1),
+    ):
+      view = getattr(self.canvas, axis + "view_scroll")
+      self.canvas.bind(f"<{key}>", lambda event, scroll=view, step=direction: scroll(step, "units"))
+
+  def resize(self, event=None):
+    width = event.width if event else self.canvas.winfo_width()
+    day_space = max(width - self.label_width, self.day_width * len(WEEKDAYS))
+    self.canvas.itemconfigure(self.window, width=self.label_width + day_space)
+    wrap = day_space // len(WEEKDAYS) - 16
+    for cell in self.grid.grid_slaves():
+      if cell.grid_info()["column"]:
+        cell.configure(wraplength=wrap)
+
+  def scroll(self, event):
+    up = event.num == 4 or (event.num != 5 and event.delta > 0)
+    self.canvas.yview_scroll(-1 if up else 1, "units")
+
+  def cell(self, row, column, text, *, heading=False):
+    cell = ttk.Label(
+      self.grid,
+      text=text,
+      anchor="center" if heading else "w",
+      padding=(7, 3),
+      wraplength=self.day_width - 16 if column else self.label_width - 16,
+      relief="groove",
+      justify="left",
+    )
+    cell.grid(row=row, column=column, sticky="nsew")
+    cell.bindtags((str(cell), str(self.canvas), *cell.bindtags()[1:]))
+
+  def show(self, sessions):
+    for cell in self.grid.grid_slaves():
+      if cell.grid_info()["row"]:
+        cell.destroy()
+    for row in range(1, self.grid.grid_size()[1]):
+      self.grid.rowconfigure(row, minsize=0, uniform="")
+    for session in range(1, max(sessions, default=0) + 1):
+      first = 3 * session - 2
+      self.grid.rowconfigure(session, minsize=self.session_height, uniform="sessions")
+      self.cell(session, 0, f"{session}\nPeriods {first}–{first + 2}")
+      for column, subjects in enumerate(sessions.get(session, [()] * len(WEEKDAYS)), 1):
+        self.cell(session, column, "\n".join(subjects))
+    self.resize()
+    self.canvas.yview_moveto(0)
+
+
 class App:
   def __init__(self, root):
     self.root = root
@@ -166,7 +251,7 @@ class App:
     self.week = ttk.Combobox(selector, width=15, state="readonly")
     self.week.pack(side="left", padx=6)
     self.week.bind("<<ComboboxSelected>>", self.draw_week)
-    self.grid = scrollable_tree(timetable, ("Period", *WEEKDAYS), (55, *([96] * 6)))
+    self.timetable = Timetable(timetable)
     self.apply_button = ttk.Button(
       courses, text="Use suggested groups in settings", state="disabled", command=self.use_suggestion
     )
@@ -391,7 +476,9 @@ class App:
   def show_results(self, snapshot, planned, suggestion):
     courses, registered, raw = snapshot
     existing = set(registered)
-    names = {(r["code"], r["group"]): r.get("name", "") for r in [*raw["open"], *raw["registered"]]}
+    names = {
+      (r["code"], r["group"]): r["name"] for r in (*raw["open"], *raw["registered"]) if r.get("name")
+    }
     if suggestion is not None:
       fixed = suggestion.existing
       proposed = suggestion.additions
@@ -426,7 +513,7 @@ class App:
       else:
         status = "Suggested" if suggestion is not None else "Planned"
       self.results.insert("", "end", values=(course.key, names.get(identity, ""), status))
-    self.weeks = week_grid((*fixed, *proposed))
+    self.weeks = week_grid((*fixed, *proposed), names)
     self.week.configure(values=[week.isoformat() for week in self.weeks])
     if self.weeks:
       self.week.current(0)
@@ -435,14 +522,9 @@ class App:
     self.draw_week()
 
   def draw_week(self, event=None):
-    self.grid.delete(*self.grid.get_children())
-    if not self.week.get():
-      return
-    week = datetime.fromisoformat(self.week.get()).date()
-    periods = self.weeks[week]
-    for period in range(1, max(periods, default=0) + 1):
-      cells = periods.get(period, [()] * 6)
-      self.grid.insert("", "end", values=(period, *(", ".join(cell) for cell in cells)))
+    selected = self.week.get()
+    week = datetime.fromisoformat(selected).date() if selected else None
+    self.timetable.show(self.weeks.get(week, {}))
 
 
 def main():

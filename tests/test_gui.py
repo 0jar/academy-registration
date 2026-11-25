@@ -36,12 +36,19 @@ SETTINGS = {
 
 
 class GuiSupportTests(unittest.TestCase):
-  def test_grid_shows_actual_teaching_weeks_and_periods(self):
-    weeks = gui_support.week_grid([COURSE])
+  def test_grid_groups_periods_into_sessions_in_actual_teaching_weeks(self):
+    weeks = gui_support.week_grid([COURSE], {("A", "1"): "Subject A"})
     self.assertEqual(list(weeks), [date(2027, 1, 4), date(2027, 1, 18)])
-    self.assertEqual(weeks[date(2027, 1, 4)][1][0], ["A/1"])
-    self.assertEqual(weeks[date(2027, 1, 18)][6][1], ["A/1"])
-    self.assertNotIn(3, weeks[date(2027, 1, 18)])
+    self.assertEqual(weeks[date(2027, 1, 4)][1][0], ["Subject A (A)"])
+    self.assertEqual(weeks[date(2027, 1, 18)][2][1], ["Subject A (A)"])
+    self.assertNotIn(1, weeks[date(2027, 1, 18)])
+
+  def test_grid_keeps_subjects_that_share_or_span_sessions(self):
+    day = date(2027, 1, 4)
+    other = Course("B", "2", (Meeting(2, 3, 5, day, day),))
+    sessions = gui_support.week_grid([COURSE, other], {("A", "1"): "Subject A"})[day]
+    self.assertEqual(sessions[1][0], ["Subject A (A)", "B"])
+    self.assertEqual(sessions[2][0], ["B"])
 
   def test_suggested_group_is_copied_as_an_exact_selection(self):
     self.assertEqual(gui_support.subject_codes("A, B C\nD"), ["A", "B", "C", "D"])
@@ -130,13 +137,20 @@ class DesktopGuiTests(unittest.TestCase):
     self.app.events.put(("result", (([], [], raw), (), suggestion)))
     self.app.events.put(("finished", "Schedule ready."))
     self.app.drain_events()
-    cells = self.app.grid.item(self.app.grid.get_children()[0], "values")
-    self.assertEqual(cells[:2], ("1", "A/1"))
+    self.root.deiconify()
+    self.root.update_idletasks()
+    timetable = self.app.timetable
+    self.assertEqual(timetable.grid.grid_slaves(row=1, column=0)[0]["text"], "1\nPeriods 1–3")
+    self.assertEqual(timetable.grid.grid_slaves(row=1, column=1)[0]["text"], "Subject A (A)")
     result = self.app.results.item(self.app.results.get_children()[0], "values")
     self.assertEqual(result, ("A/1", "Subject A", "Suggested"))
     self.app.week.current(1)
     self.app.draw_week()
-    self.assertEqual(self.app.grid.item(self.app.grid.get_children()[3], "values")[2], "A/1")
+    self.root.update_idletasks()
+    self.assertEqual(timetable.grid.grid_slaves(row=2, column=2)[0]["text"], "Subject A (A)")
+    self.assertEqual(timetable.grid.grid_slaves(row=1, column=1)[0]["text"], "")
+    self.assertEqual(timetable.grid.grid_bbox(0, 1)[3], timetable.session_height)
+    self.assertEqual(timetable.grid.grid_bbox(0, 2)[3], timetable.session_height)
     self.assertTrue(self.app.apply_button.instate(["!disabled"]))
     self.app.apply_button.invoke()
     self.assertIn("Enter the opening time", self.app.status.get())

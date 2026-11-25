@@ -55,10 +55,12 @@ class LaunchTests(unittest.IsolatedAsyncioTestCase):
       launch=AsyncMock(side_effect=[Error("unavailable"), Error("unavailable"), bundled])
     )
     chrome, brave = Path("chrome"), Path("brave")
-    with patch.object(
-      browsers, "installed_browsers", return_value=[("Chrome", chrome), ("Brave", brave)]
+    with (
+      patch.object(browsers, "installed_browsers", return_value=[("Chrome", chrome), ("Brave", brave)]),
+      patch.object(browsers, "download_chromium") as download,
     ):
       self.assertIs(await browsers.launch_browser(chromium, headless=True), bundled)
+    download.assert_not_awaited()
     self.assertEqual(
       chromium.launch.await_args_list,
       [
@@ -74,18 +76,64 @@ class LaunchTests(unittest.IsolatedAsyncioTestCase):
     chromium = SimpleNamespace(launch=AsyncMock(side_effect=Error("unavailable")))
     with (
       patch.object(browsers, "installed_browsers") as detect,
+      patch.object(browsers, "download_chromium") as download,
       self.assertRaises(Error),
     ):
       await browsers.launch_browser(chromium, headless=False, executable="/custom/browser")
     detect.assert_not_called()
+    download.assert_not_awaited()
     chromium.launch.assert_awaited_once_with(headless=False, executable_path="/custom/browser")
 
-  async def test_missing_bundled_browser_gives_install_command(self):
+  async def test_missing_bundled_browser_downloads_only_when_detection_is_empty(self):
     from playwright.async_api import Error
 
-    chromium = SimpleNamespace(launch=AsyncMock(side_effect=Error("unavailable")))
+    missing = Error("BrowserType.launch: Executable doesn't exist at /cache/chromium")
+    bundled = object()
+    chromium = SimpleNamespace(launch=AsyncMock(side_effect=[missing, bundled]))
     with (
       patch.object(browsers, "installed_browsers", return_value=[]),
-      self.assertRaisesRegex(browsers.StopRun, "playwright install chromium"),
+      patch.object(browsers, "download_chromium") as download,
     ):
-      await browsers.launch_browser(chromium, headless=True)
+      self.assertIs(await browsers.launch_browser(chromium, headless=True), bundled)
+    download.assert_awaited_once_with(headless=True)
+    self.assertEqual(chromium.launch.await_args_list, [call(headless=True), call(headless=True)])
+
+  async def test_cached_browser_skips_download(self):
+    bundled = object()
+    chromium = SimpleNamespace(launch=AsyncMock(return_value=bundled))
+    with (
+      patch.object(browsers, "installed_browsers", return_value=[]),
+      patch.object(browsers, "download_chromium") as download,
+    ):
+      self.assertIs(await browsers.launch_browser(chromium, headless=False), bundled)
+    download.assert_not_awaited()
+
+  async def test_launch_failure_does_not_download_when_browser_was_detected_or_cache_exists(self):
+    from playwright.async_api import Error
+
+    scenarios = (
+      ([("Chrome", Path("chrome"))], "Executable doesn't exist at /cache/chromium"),
+      ([], "Chromium closed during launch"),
+    )
+    for installed, reason in scenarios:
+      chromium = SimpleNamespace(launch=AsyncMock(side_effect=Error(reason)))
+      with (
+        self.subTest(reason=reason),
+        patch.object(browsers, "installed_browsers", return_value=installed),
+        patch.object(browsers, "download_chromium") as download,
+        self.assertRaisesRegex(browsers.StopRun, "Couldn't start a browser"),
+      ):
+        await browsers.launch_browser(chromium, headless=False)
+      download.assert_not_awaited()
+
+  async def test_downloader_requests_only_the_browser_variant_needed(self):
+    process = SimpleNamespace(wait=AsyncMock(return_value=0))
+    for headless, variant in ((True, "--only-shell"), (False, "--no-shell")):
+      with (
+        self.subTest(headless=headless),
+        patch.dict(os.environ, {"ACADEMY_PASSWORD": "fixture"}),
+        patch.object(browsers.asyncio, "create_subprocess_exec", return_value=process) as launch,
+      ):
+        await browsers.download_chromium(headless=headless)
+      self.assertEqual(launch.call_args.args[1:], ("-m", "playwright", "install", "chromium", variant))
+      self.assertNotIn("ACADEMY_PASSWORD", launch.call_args.kwargs["env"])

@@ -18,9 +18,7 @@ from .core import StopRun, allowed, choose, clashes, now
 
 LOG = logging.getLogger("academy")
 
-if os.name == "nt":
-  from . import windows_files
-else:
+if os.name != "nt":
   import fcntl
 
 
@@ -40,6 +38,8 @@ def create_config(path, config=None):
     content = dump_text(config).encode("utf-8")
   try:
     if os.name == "nt":
+      from . import windows_files
+
       windows_files.create_private_file(path, content)
       return
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -52,6 +52,8 @@ def create_config(path, config=None):
 def private_directory(folder):
   """Keep reports and run state private to the current user."""
   if os.name == "nt":
+    from . import windows_files
+
     return windows_files.private_directory(folder)
   folder = Path(folder)
   folder.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -68,6 +70,8 @@ def atomic_write(path, content, *, private_parent=True):
     private_directory(path.parent)
   data = content.encode("utf-8") if isinstance(content, str) else content
   if os.name == "nt":
+    from . import windows_files
+
     temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
     windows_files.create_private_file(temporary, data)
   else:
@@ -89,6 +93,8 @@ def atomic_write(path, content, *, private_parent=True):
 
 def replace_file(temporary, path):
   if os.name == "nt":
+    from . import windows_files
+
     windows_files.replace_file(temporary, path)
   else:
     os.replace(temporary, path)
@@ -124,6 +130,8 @@ def read_state(path):
 
 def open_account_lock(path):
   if os.name == "nt":
+    from . import windows_files
+
     return windows_files.open_account_lock(path)
   descriptor = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
   lock = os.fdopen(descriptor, "a")

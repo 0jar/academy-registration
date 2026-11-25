@@ -1,10 +1,12 @@
 # Course registration
 
-This is a small Python tool for checking and registering courses at the academy. You can see what fits before you submit anything. You'll need Python 3.10 or newer and a Chromium-based browser. The tool has file handling for Linux, macOS, and native Windows 11. The test workflow runs on all three.
+This is a small Python tool for checking and registering courses at the academy. You can see what fits before you submit anything. It uses Python 3.10 or newer and a Chromium-based browser. The tool has file handling for Linux, macOS, and native Windows 11. The test workflow runs on all three.
 
 That portal is Claude slop, so I had to defeat it with my hindsight™ and some GPT slop. Full disclosure, this project was assisted in part by OpenAI Codex using GPT 6.2 Sol.
 
 ## Set it up
+
+The terminal and desktop launchers check their Python packages on startup and run pip if anything is missing or out of date. Running from a virtual environment keeps the install with this app.
 
 On Linux or macOS, run these from the source folder.
 
@@ -12,7 +14,6 @@ On Linux or macOS, run these from the source folder.
 python3 -m venv .venv
 . .venv/bin/activate
 python -m pip install .
-python -m playwright install chromium
 academy-register --configure
 ```
 
@@ -21,7 +22,6 @@ On Windows, open PowerShell in the source folder and use the executables inside 
 ```powershell
 py -3 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install .
-.\.venv\Scripts\python.exe -m playwright install chromium
 .\.venv\Scripts\academy-register.exe --configure
 ```
 
@@ -53,14 +53,14 @@ academy-register --check-config
 academy-register --demo
 ```
 
-Both commands run offline. JSON works too. If you have both `preferences.txt` and `preferences.json`, pick one with `--config`.
+Both commands run offline once the Python packages are installed. JSON works too. If you have both `preferences.txt` and `preferences.json`, pick one with `--config`.
 
 ```sh
 academy-register --init-config
 academy-register --init-config --config plan.json
 ```
 
-These give you a starter file to edit. If the file already exists, pick another name. If you're running straight from the source folder, install `requirements.txt` and use `python academy_register.py` or `python -m academy_registration` with the same flags.
+These give you a starter file to edit. If the file already exists, pick another name. From the source folder, use `python academy_register.py` or `python -m academy_registration` with the same flags.
 
 The planner tries to fit as many of your courses as possible. It uses fewer last-resort groups when it can, then goes by the order you gave it. It checks the dates too, so periods that overlap in different parts of the semester can still fit. Courses you already have selected stay selected, even if you left them out of your settings.
 
@@ -73,7 +73,7 @@ academy-register --catalog
 
 The first command checks your plan. The second shows the whole course list the portal currently shows, including courses with disabled checkboxes. Enter your password at the hidden prompt, or set `ACADEMY_PASSWORD` for an unattended run. Keep the password out of your settings and command arguments. Use `--headless` if you want the browser hidden, or `--browser-executable` followed by a path to pick a specific browser.
 
-Playwright starts an installed browser if it can. On Windows it tries Chrome, Edge, then Brave. On Linux it tries Chrome, Ungoogled Chromium (including packages that use the `chromium` executable name), then Brave. On macOS it looks for Chrome in Applications. If none starts, it uses the Chromium installed by `python -m playwright install chromium`. An explicit `--browser-executable` takes precedence and reports a launch failure directly. For a portable install or a browser with a different command name, pass its executable path.
+Playwright starts an installed browser if it can. On Windows it tries Chrome, Edge, then Brave. On Linux it tries Chrome, Ungoogled Chromium (including packages that use the `chromium` executable name), then Brave. On macOS it looks for Chrome in Applications. If none starts, it tries the copy of Chromium in Playwright's cache. The app downloads Chromium only when it detects no supported browser and the cache is missing the version it needs. An explicit `--browser-executable` takes precedence and reports a launch failure directly. For a portable install or a browser with a different command name, pass its executable path.
 
 Each browser run prints the path to its own private folder under `reports/`. Use `--evidence-dir` if you want those folders somewhere else. Here's what you can find in a run folder.
 

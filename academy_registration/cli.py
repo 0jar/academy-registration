@@ -27,10 +27,14 @@ from .files import (
 )
 from .portal import URL, Site
 from .preferences import configure
+from .startup import ensure_requirements
 from .suggestions import describe_schedule, suggest
 
 LOG = logging.getLogger("academy")
-HANOI = ZoneInfo("Asia/Ho_Chi_Minh")
+
+
+def hanoi_timezone():
+  return ZoneInfo("Asia/Ho_Chi_Minh")
 
 
 async def capture(folder, site, result, snapshot=None, catalog=False):
@@ -57,7 +61,7 @@ async def register(site, journal, opening):
   end = opening + timedelta(minutes=config["window_minutes"])
   targets = {spec["code"] for spec in config["courses"]}
   checked_session, last_refresh = False, None
-  LOG.info("Ready to go at %s (Hanoi time).", opening.astimezone(HANOI).isoformat())
+  LOG.info("Ready to go at %s (Hanoi time).", opening.astimezone(hanoi_timezone()).isoformat())
   while now() < end:
     current = now()
     check_at = opening - timedelta(minutes=5 if not checked_session else 1)
@@ -136,7 +140,7 @@ async def _run_browser(args, config):
   try:
     from playwright.async_api import async_playwright
   except ImportError:
-    raise StopRun("Run python -m pip install -r requirements.txt first.") from None
+    raise StopRun("Couldn't load Playwright. Check the packages in your Python environment.") from None
   if args.submit:
     opening = datetime.fromisoformat(config["opening"])
     if now() >= opening + timedelta(minutes=config["window_minutes"]):
@@ -151,7 +155,6 @@ async def _run_browser(args, config):
       try:
         page = await browser.new_page()
         page.set_default_timeout(10000)
-        # Suggestions use the whole list, independent of configured course IDs.
         site_config = {**config, "courses": []} if args.suggest else config
         site = Site(page, site_config, args.headless)
         password = getattr(args, "password", None)
@@ -260,6 +263,7 @@ def main(argv=None):
   )
   logging.basicConfig(level=logging.INFO, handlers=[handler])
   try:
+    ensure_requirements(LOG.info)
     if args.config is None:
       candidates = [
         path for path in (Path("preferences.txt"), Path("preferences.json")) if path.exists()

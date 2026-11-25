@@ -8,9 +8,9 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from academy_registration import cli  # noqa: E402
-from academy_registration.core import StopRun, load_config  # noqa: E402
-from academy_registration.suggestions import day_fatigue, suggest  # noqa: E402
+from academy_registration import cli
+from academy_registration.core import StopRun, load_config
+from academy_registration.suggestions import day_fatigue, suggest
 
 EXAMPLE = Path(cli.__file__).with_name("preferences.example.json")
 

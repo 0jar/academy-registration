@@ -108,7 +108,6 @@ def suggest(raw, objective, *, include=(), exclude=(), limit=SEARCH_LIMIT):
     labels = ", ".join("/".join(key) for key in sorted(missing))
     raise StopRun(f"The current course list is missing the timetable for {labels}.")
 
-  # Check the most constrained subjects first to find a good plan early.
   options = [
     sorted(
       (item for item in group if not any(occupied.get(d, 0) & m for d, m in item[1].items())),

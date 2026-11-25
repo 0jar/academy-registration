@@ -1,12 +1,16 @@
 """Find installed browsers and launch them through Playwright."""
 
+import asyncio
 import logging
 import os
 import shutil
+import signal
 import sys
+from contextlib import suppress
 from pathlib import Path
 
 from .core import StopRun
+from .startup import console_python
 
 LOG = logging.getLogger("academy")
 
@@ -67,6 +71,48 @@ def installed_browsers():
       yield name, path
 
 
+async def download_chromium(*, headless):
+  LOG.info("No supported browser detected. Downloading Playwright Chromium…")
+  python, options = console_python()
+  variant = "--only-shell" if headless else "--no-shell"
+  env = os.environ.copy()
+  env.pop("ACADEMY_PASSWORD", None)
+  # Playwright uses INIT_CWD to resolve a relative browser cache path.
+  env.setdefault("INIT_CWD", str(Path.cwd()))
+  if os.name != "nt":
+    options["start_new_session"] = True
+  try:
+    process = await asyncio.create_subprocess_exec(
+      python,
+      "-m",
+      "playwright",
+      "install",
+      "chromium",
+      variant,
+      cwd=Path(__file__).resolve().parent,
+      env=env,
+      stdout=asyncio.subprocess.DEVNULL,
+      stderr=asyncio.subprocess.DEVNULL,
+      **options,
+    )
+    try:
+      if await process.wait() == 0:
+        return
+    except asyncio.CancelledError:
+      with suppress(ProcessLookupError):
+        if os.name == "nt":
+          process.terminate()
+        else:
+          os.killpg(process.pid, signal.SIGTERM)
+      await process.wait()
+      raise
+  except OSError:
+    pass
+  raise StopRun(
+    "Couldn't download Playwright Chromium. Check your connection or pick an installed browser."
+  )
+
+
 async def launch_browser(chromium, *, headless, executable=None):
   from playwright.async_api import Error
 
@@ -74,7 +120,9 @@ async def launch_browser(chromium, *, headless, executable=None):
     LOG.info("Starting the browser from --browser-executable.")
     return await chromium.launch(headless=headless, executable_path=executable)
 
+  detected = False
   for name, path in installed_browsers():
+    detected = True
     try:
       browser = await chromium.launch(headless=headless, executable_path=path)
     except Error:
@@ -86,7 +134,12 @@ async def launch_browser(chromium, *, headless, executable=None):
   LOG.info("Using Playwright Chromium.")
   try:
     return await chromium.launch(headless=headless)
+  except Error as error:
+    if detected or "Executable doesn't exist at " not in str(error):
+      raise StopRun("Couldn't start a browser. Pick another one with --browser-executable.") from None
+
+  await download_chromium(headless=headless)
+  try:
+    return await chromium.launch(headless=headless)
   except Error:
-    raise StopRun(
-      "Couldn't start a browser. Run python -m playwright install chromium or pass --browser-executable."
-    ) from None
+    raise StopRun("Downloaded Playwright Chromium but couldn't start it.") from None

@@ -9,11 +9,7 @@ description = "Check and register courses through the school portal from your te
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
-dependencies = [
-  "playwright==1.65.2",
-  "tzdata; sys_platform == 'win32'",
-  "pywin32>=306; sys_platform == 'win32'",
-]
+dynamic = ["dependencies"]
 classifiers = [
   "Operating System :: POSIX",
   "Operating System :: MacOS :: MacOS X",
@@ -32,8 +28,11 @@ academy-register-gui = "academy_registration.gui:main"
 [tool.setuptools.packages.find]
 include = ["academy_registration*"]
 
+[tool.setuptools.dynamic]
+dependencies = {file = ["academy_registration/requirements.txt"]}
+
 [tool.setuptools.package-data]
-academy_registration = ["preferences.example.json", "preferences.example.txt"]
+academy_registration = ["preferences.example.json", "preferences.example.txt", "requirements.txt"]
 
 [tool.ruff]
 line-length = 104

@@ -6,6 +6,7 @@ from argparse import Namespace
 from datetime import datetime, timedelta
 from pathlib import Path
 from queue import Empty, Queue
+from threading import Thread
 
 try:
   import tkinter as tk
@@ -13,11 +14,12 @@ try:
 except ImportError:
   tk = None
 
-from .cli import HANOI
+from .cli import hanoi_timezone
 from .core import StopRun, identifier, load_config, now
 from .files import atomic_write
 from .gui_support import BrowserJob, proposal_preferences, subject_codes, week_grid
 from .preferences import dump_text, parse_text
+from .startup import ensure_requirements
 from .suggestions import WEEKDAYS
 
 SETTINGS = (
@@ -283,7 +285,7 @@ class App:
           "Registration window ended", "Check the opening time in your settings.", parent=self.root
         )
         return
-      when = opening.astimezone(HANOI).strftime("%Y-%m-%d %H:%M:%S")
+      when = opening.astimezone(hanoi_timezone()).strftime("%Y-%m-%d %H:%M:%S")
       targets = ", ".join(course["code"] for course in config["courses"])
       text = f"Register {targets} when the window opens at {when} Hanoi time?"
       if opening <= now():
@@ -444,9 +446,56 @@ def main():
   except tk.TclError:
     print("Couldn't open a desktop window. Run this from a graphical session.", file=sys.stderr)
     return 2
-  App(root)
+
+  root.withdraw()
+  root.title("Academy Registration")
+  splash = ttk.Frame(root, padding=20)
+  notice = ttk.Label(splash, width=55, anchor="w")
+  notice.pack(fill="x")
+  progress = ttk.Progressbar(splash, mode="indeterminate")
+  progress.pack(fill="x", pady=(10, 0))
+  events = Queue()
+  result = 0
+
+  def install():
+    try:
+      ensure_requirements(events.put, on_progress=events.put)
+    except Exception as error:
+      events.put(error)
+    else:
+      events.put(None)
+
+  def poll_install():
+    nonlocal result
+    while True:
+      try:
+        event = events.get_nowait()
+      except Empty:
+        root.after(40, poll_install)
+        return
+      if isinstance(event, str):
+        notice.configure(text=event)
+        if not splash.winfo_manager():
+          splash.pack(fill="both", expand=True)
+          root.deiconify()
+          progress.start()
+        continue
+      progress.stop()
+      splash.destroy()
+      if event is None:
+        App(root)
+        root.deiconify()
+      else:
+        detail = str(event) if isinstance(event, StopRun) else "Couldn't check the Python packages."
+        result = 2
+        messagebox.showerror("Academy Registration", detail, parent=root)
+        root.destroy()
+      return
+
+  Thread(target=install).start()
+  root.after(0, poll_install)
   root.mainloop()
-  return 0
+  return result
 
 
 if __name__ == "__main__":

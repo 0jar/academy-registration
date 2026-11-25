@@ -12,10 +12,10 @@ from threading import Event
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from academy_registration import cli, gui_support  # noqa: E402
-from academy_registration.core import Course, Meeting  # noqa: E402
-from academy_registration.files import Journal, write_json  # noqa: E402
-from academy_registration.preferences import dump_text, parse_text  # noqa: E402
+from academy_registration import cli, gui_support
+from academy_registration.core import Course, Meeting
+from academy_registration.files import Journal, write_json
+from academy_registration.preferences import dump_text, parse_text
 
 COURSE = Course(
   "A",

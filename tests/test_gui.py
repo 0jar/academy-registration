@@ -176,6 +176,54 @@ class DesktopGuiTests(unittest.TestCase):
     self.assertEqual(self.app.config(require_courses=True)["courses"][0]["code"], "A")
     self.assertEqual(self.app.values["Semester"].get(), SETTINGS["semester"])
 
+  def test_language_switch_updates_visible_data_and_preserves_editor(self):
+    from academy_registration.suggestions import Schedule
+
+    self.app.set_course_text("Course: draft")
+    self.app.password.set("fixture-secret")
+    raw = {"open": [{"code": "A", "group": "1", "name": "Học phần A"}], "registered": []}
+    self.app.show_results(([], [], raw), (), Schedule((), (COURSE,), 2, 0, 1, 3, True, ()))
+    self.app.week.current(1)
+    self.app.draw_week()
+    self.app.events.put(("status", "Ready to go at 08:00 (Hanoi time)."))
+    self.app.drain_events()
+    self.root.deiconify()
+    self.root.update_idletasks()
+    self.app.language_picker.current(1)
+    self.app.language_picker.event_generate("<<ComboboxSelected>>")
+    self.assertEqual(self.root.title(), "Đăng ký học phần")
+    self.assertEqual(self.app.preview_button["text"], "Gợi ý lịch học")
+    self.assertIn("2 ngày đi học", self.app.metrics.get())
+    self.assertIn("Sẵn sàng đăng ký lúc 08:00", self.app.log.get("1.0", "end"))
+    self.assertEqual(self.app.results.heading("Status", "text"), "Trạng thái")
+    item = self.app.results.get_children()[0]
+    self.assertEqual(self.app.results.set(item, "Status"), "Được gợi ý")
+    timetable = self.app.timetable.grid
+    self.assertEqual(timetable.grid_slaves(row=0, column=2)[0]["text"], "Thứ Ba")
+    self.assertEqual(timetable.grid_slaves(row=2, column=0)[0]["text"], "2\nTiết 4–6")
+    self.assertEqual(timetable.grid_slaves(row=2, column=2)[0]["text"], "Học phần A (A)")
+    self.assertEqual(self.app.week.current(), 1)
+    self.assertEqual(self.app.courses.get("1.0", "end-1c"), "Course: draft")
+    self.assertEqual(self.app.password.get(), "fixture-secret")
+    self.app.language_picker.current(0)
+    self.app.language_picker.event_generate("<<ComboboxSelected>>")
+    self.assertEqual(self.app.preview_button["text"], "Suggest schedule")
+    self.assertIn("Ready to go at 08:00", self.app.log.get("1.0", "end"))
+
+  def test_action_buttons_fit_at_minimum_window_size_in_both_languages(self):
+    self.root.geometry("820x600")
+    self.root.deiconify()
+    buttons = (self.app.preview_button, self.app.register_button, self.app.cancel_button)
+    for language in (0, 1):
+      self.app.language_picker.current(language)
+      self.app.language_picker.event_generate("<<ComboboxSelected>>")
+      self.root.update()
+      for button in buttons:
+        with self.subTest(language=language, button=button["text"]):
+          self.assertTrue(button.winfo_viewable())
+          self.assertGreaterEqual(button.winfo_height(), button.winfo_reqheight())
+          self.assertGreaterEqual(button.winfo_width(), button.winfo_reqwidth())
+
   def test_password_field_is_masked_used_and_never_saved(self):
     self.assertEqual(self.app.password_entry.grid_info()["row"], 1)
     self.assertTrue(self.app.password_entry.cget("show"))

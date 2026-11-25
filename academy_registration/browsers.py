@@ -72,12 +72,11 @@ def installed_browsers():
 
 
 async def download_chromium(*, headless):
-  LOG.info("No supported browser detected. Downloading Playwright Chromium…")
+  LOG.info("No supported browser detected. Downloading Playwright Chromium...")
   python, options = console_python()
   variant = "--only-shell" if headless else "--no-shell"
   env = os.environ.copy()
   env.pop("ACADEMY_PASSWORD", None)
-  # Playwright uses INIT_CWD to resolve a relative browser cache path.
   env.setdefault("INIT_CWD", str(Path.cwd()))
   if os.name != "nt":
     options["start_new_session"] = True

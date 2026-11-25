@@ -17,6 +17,7 @@ except ImportError:
 from .cli import hanoi_timezone
 from .core import StopRun, identifier, load_config, now
 from .files import atomic_write
+from .gui_i18n import LANGUAGES, Locale
 from .gui_support import BrowserJob, proposal_preferences, subject_codes, week_grid
 from .preferences import course_lines, dump_text, parse_text
 from .startup import ensure_requirements
@@ -45,8 +46,21 @@ def scrollable_tree(parent, columns, widths):
   return tree
 
 
+def language_picker(parent, locale, on_change):
+  picker = ttk.Combobox(parent, values=LANGUAGES, state="readonly", width=11)
+  picker.set(locale.language)
+
+  def switch(event):
+    locale.language = picker.get()
+    on_change()
+
+  picker.bind("<<ComboboxSelected>>", switch)
+  return picker
+
+
 class Timetable:
-  def __init__(self, parent):
+  def __init__(self, parent, translate):
+    self.t = translate
     container = ttk.Frame(parent)
     container.pack(fill="both", expand=True)
     container.columnconfigure(0, weight=1)
@@ -70,8 +84,10 @@ class Timetable:
     self.grid.columnconfigure(0, minsize=self.label_width)
     for column in range(1, len(WEEKDAYS) + 1):
       self.grid.columnconfigure(column, weight=1, uniform="days", minsize=self.day_width)
-    for column, title in enumerate(("Session", *WEEKDAYS)):
-      self.cell(0, column, title, heading=True)
+    self.headings = [
+      self.cell(0, column, self.t(title), heading=True)
+      for column, title in enumerate(("Session", *WEEKDAYS))
+    ]
     self.grid.bind(
       "<Configure>", lambda event: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
     )
@@ -113,8 +129,11 @@ class Timetable:
     )
     cell.grid(row=row, column=column, sticky="nsew")
     cell.bindtags((str(cell), str(self.canvas), *cell.bindtags()[1:]))
+    return cell
 
   def show(self, sessions):
+    for cell, title in zip(self.headings, ("Session", *WEEKDAYS)):
+      cell.configure(text=self.t(title))
     for cell in self.grid.grid_slaves():
       if cell.grid_info()["row"]:
         cell.destroy()
@@ -123,7 +142,7 @@ class Timetable:
     for session in range(1, max(sessions, default=0) + 1):
       first = 3 * session - 2
       self.grid.rowconfigure(session, minsize=self.session_height, uniform="sessions")
-      self.cell(session, 0, f"{session}\nPeriods {first}–{first + 2}")
+      self.cell(session, 0, f"{session}\n" + self.t(f"Periods {first}–{first + 2}"))
       for column, subjects in enumerate(sessions.get(session, [()] * len(WEEKDAYS)), 1):
         self.cell(session, column, "\n".join(subjects))
     self.resize()
@@ -131,8 +150,13 @@ class Timetable:
 
 
 class App:
-  def __init__(self, root):
+  def __init__(self, root, locale=None):
     self.root = root
+    self.t = locale or Locale()
+    self.translations = [(root.title, "Academy Registration")]
+    self.messages = {}
+    self.log_lines = []
+    self.result_statuses = {}
     self.events = Queue()
     self.job = None
     self.close_after_run = False
@@ -140,7 +164,7 @@ class App:
     self.suggestion = None
     self.settings_path = None
     self.state_dir = Path(".academy-run").resolve()
-    root.title("Academy Registration")
+    root.title(self.t("Academy Registration"))
     root.geometry("1140x740")
     root.minsize(820, 600)
     root.protocol("WM_DELETE_WINDOW", self.close)
@@ -152,8 +176,9 @@ class App:
     layout.add(results, weight=3)
     self.build_settings(settings)
     self.build_results(results)
-    self.status = tk.StringVar(
-      value="Enter your student ID and password to suggest a schedule, or open a settings file."
+    self.status = tk.StringVar()
+    self.set_message(
+      self.status, "Enter your student ID and password to suggest a schedule, or open a settings file."
     )
     ttk.Label(root, textvariable=self.status, anchor="w").pack(fill="x", padx=16, pady=(0, 10))
 
@@ -162,13 +187,50 @@ class App:
       self.load(configs[0])
     root.after(80, self.drain_events)
 
+  def widget(self, kind, parent, text, **options):
+    widget = kind(parent, text=self.t(text), **options)
+    self.translations.append((lambda value: widget.configure(text=value), text))
+    return widget
+
+  def set_message(self, variable, text):
+    self.messages[str(variable)] = (variable, text)
+    variable.set(self.t(text))
+
+  def update_language(self):
+    for setter, text in self.translations:
+      setter(self.t(text))
+    for variable, text in self.messages.values():
+      variable.set(self.t(text))
+    for item, status in self.result_statuses.items():
+      self.results.set(item, "Status", self.t(status))
+    self.log.configure(state="normal")
+    self.log.delete("1.0", "end")
+    self.log.insert("end", "".join(self.t(line) + "\n" for line in self.log_lines))
+    self.log.see("end")
+    self.log.configure(state="disabled")
+    self.draw_week()
+
+  def show_error(self, title, detail):
+    messagebox.showerror(self.t(title), self.t(str(detail)), parent=self.root)
+
+  def confirm(self, title, detail):
+    return messagebox.askyesno(self.t(title), self.t(detail), parent=self.root)
+
   def build_settings(self, frame):
+    footer = ttk.Frame(frame)
+    footer.pack(side="bottom", fill="x")
+
     bar = ttk.Frame(frame)
     bar.pack(fill="x", pady=(0, 8))
-    self.open_button = ttk.Button(bar, text="Open settings…", command=self.load)
+    self.open_button = self.widget(ttk.Button, bar, "Open settings...", command=self.load)
     self.open_button.pack(side="left")
-    self.save_button = ttk.Button(bar, text="Save settings…", command=self.save)
+    self.save_button = self.widget(ttk.Button, bar, "Save settings...", command=self.save)
     self.save_button.pack(side="left", padx=6)
+    language = ttk.Frame(frame)
+    language.pack(fill="x", pady=(0, 8))
+    self.widget(ttk.Label, language, "Language").pack(side="left", padx=(0, 6))
+    self.language_picker = language_picker(language, self.t, self.update_language)
+    self.language_picker.pack(side="left")
 
     form = ttk.Frame(frame)
     form.pack(fill="x")
@@ -178,7 +240,7 @@ class App:
     fields = (*SETTINGS[:1], (None, "Password", ""), *SETTINGS[1:])
     for index, (key, label, default) in enumerate(fields):
       value = tk.StringVar(value=default)
-      ttk.Label(form, text=label).grid(row=index, column=0, sticky="w", pady=3)
+      self.widget(ttk.Label, form, label).grid(row=index, column=0, sticky="w", pady=3)
       entry = ttk.Entry(form, textvariable=value, width=24)
       if key is None:
         entry.configure(show="•")
@@ -187,55 +249,60 @@ class App:
         self.values[key] = value
       entry.grid(row=index, column=1, sticky="ew", padx=(8, 0), pady=3)
       self.inputs.append(entry)
-    ttk.Label(frame, text="Example opening: 2027-01-05 08:00 Hanoi").pack(anchor="w", pady=(2, 8))
+    self.widget(ttk.Label, frame, "Example opening: 2027-01-05 08:00 Hanoi").pack(
+      anchor="w", pady=(2, 8)
+    )
 
-    ttk.Label(frame, text="Courses to register").pack(anchor="w")
+    self.widget(ttk.Label, frame, "Courses to register").pack(anchor="w")
     ttk.Label(frame, text="Course: IE.014.02\nGroup: 2 | Fri 10-12", justify="left").pack(anchor="w")
     self.courses = tk.Text(frame, height=8, width=33, undo=True, wrap="word")
     self.courses.pack(fill="both", expand=True, pady=(4, 10))
     self.inputs.append(self.courses)
 
-    filters = ttk.LabelFrame(frame, text="Schedule filters", padding=8)
+    filters = self.widget(ttk.LabelFrame, footer, "Schedule filters", padding=8)
     filters.pack(fill="x")
     filters.columnconfigure(1, weight=1)
     self.objective = tk.StringVar(value="days")
     objectives = ttk.Frame(filters)
     objectives.grid(row=0, column=0, columnspan=2, sticky="w")
     for label, value in (("Fewest days", "days"), ("Least fatigue", "fatigue")):
-      button = ttk.Radiobutton(objectives, text=label, variable=self.objective, value=value)
+      button = self.widget(ttk.Radiobutton, objectives, label, variable=self.objective, value=value)
       button.pack(side="left", padx=(0, 8))
       self.inputs.append(button)
     self.include, self.exclude = tk.StringVar(), tk.StringVar()
     for index, (label, value) in enumerate(
       (("Include codes", self.include), ("Exclude codes", self.exclude)), 1
     ):
-      ttk.Label(filters, text=label).grid(row=index, column=0, sticky="w", pady=3)
+      self.widget(ttk.Label, filters, label).grid(row=index, column=0, sticky="w", pady=3)
       entry = ttk.Entry(filters, textvariable=value)
       entry.grid(row=index, column=1, sticky="ew", padx=(8, 0))
       self.inputs.append(entry)
-    ttk.Label(filters, text="Separate subject codes with spaces or commas.").grid(
+    self.widget(ttk.Label, filters, "Separate subject codes with spaces or commas.").grid(
       row=3, column=0, columnspan=2, sticky="w"
     )
 
     self.headless = tk.BooleanVar(value=False)
-    hidden = ttk.Checkbutton(frame, text="Hide the school browser", variable=self.headless)
+    hidden = self.widget(ttk.Checkbutton, footer, "Hide the school browser", variable=self.headless)
     hidden.pack(anchor="w", pady=6)
     self.inputs.append(hidden)
-    actions = ttk.Frame(frame)
+    actions = ttk.Frame(footer)
     actions.pack(fill="x")
-    self.preview_button = ttk.Button(
-      actions, text="Suggest schedule", command=lambda: self.start(False)
+    self.preview_button = self.widget(
+      ttk.Button, actions, "Suggest schedule", command=lambda: self.start(False)
     )
-    self.preview_button.pack(side="left")
-    self.register_button = ttk.Button(
-      actions, text="Schedule registration…", command=lambda: self.start(True)
+    self.preview_button.grid(row=0, column=0, sticky="w")
+    self.register_button = self.widget(
+      ttk.Button, actions, "Schedule registration...", command=lambda: self.start(True)
     )
-    self.register_button.pack(side="left", padx=6)
-    self.cancel_button = ttk.Button(actions, text="Cancel run", command=self.cancel, state="disabled")
-    self.cancel_button.pack(side="left")
+    self.register_button.grid(row=0, column=1, sticky="w", padx=(6, 0))
+    self.cancel_button = self.widget(
+      ttk.Button, actions, "Cancel run", command=self.cancel, state="disabled"
+    )
+    self.cancel_button.grid(row=1, column=0, sticky="w", pady=(4, 0))
 
   def build_results(self, parent):
-    self.metrics = tk.StringVar(value="Suggest a schedule to see the timetable.")
+    self.metrics = tk.StringVar()
+    self.set_message(self.metrics, "Suggest a schedule to see the timetable.")
     ttk.Label(parent, textvariable=self.metrics, wraplength=610, justify="left").pack(
       anchor="w", pady=(0, 6)
     )
@@ -243,20 +310,33 @@ class App:
     tabs.pack(fill="both", expand=True)
     timetable, courses, log = (ttk.Frame(tabs, padding=6) for _ in range(3))
     for frame, title in ((timetable, "Timetable"), (courses, "Results"), (log, "Run log")):
-      tabs.add(frame, text=title)
+      tabs.add(frame, text=self.t(title))
+      self.translations.append((lambda text, page=frame: tabs.tab(page, text=text), title))
 
     selector = ttk.Frame(timetable)
     selector.pack(fill="x", pady=(0, 6))
-    ttk.Label(selector, text="Week of").pack(side="left")
+    self.widget(ttk.Label, selector, "Week of").pack(side="left")
     self.week = ttk.Combobox(selector, width=15, state="readonly")
     self.week.pack(side="left", padx=6)
     self.week.bind("<<ComboboxSelected>>", self.draw_week)
-    self.timetable = Timetable(timetable)
-    self.apply_button = ttk.Button(
-      courses, text="Use suggested groups in settings", state="disabled", command=self.use_suggestion
+    self.timetable = Timetable(timetable, self.t)
+    self.apply_button = self.widget(
+      ttk.Button,
+      courses,
+      "Use suggested groups in settings",
+      state="disabled",
+      command=self.use_suggestion,
     )
     self.apply_button.pack(anchor="w", pady=(0, 6))
-    self.results = scrollable_tree(courses, ("Subject / group", "Name", "Status"), (105, 320, 100))
+    columns = ("Subject / group", "Name", "Status")
+    self.results = scrollable_tree(courses, columns, (105, 320, 100))
+    for title in columns:
+
+      def setter(text, column=title):
+        self.results.heading(column, text=text)
+
+      setter(self.t(title))
+      self.translations.append((setter, title))
     self.log = tk.Text(log, state="disabled", wrap="word", width=45, height=15)
     scrollbar = ttk.Scrollbar(log, command=self.log.yview)
     self.log.configure(yscrollcommand=scrollbar.set)
@@ -287,7 +367,8 @@ class App:
 
   def load(self, path=None):
     path = path or filedialog.askopenfilename(
-      parent=self.root, filetypes=[("Settings files", "*.txt *.json"), ("All files", "*")]
+      parent=self.root,
+      filetypes=[(self.t("Settings files"), "*.txt *.json"), (self.t("All files"), "*")],
     )
     if not path:
       return
@@ -295,24 +376,24 @@ class App:
       config = load_config(path, allow_empty_courses=True)
       self.show_config(config)
     except (StopRun, OSError) as error:
-      messagebox.showerror("Couldn't open settings", str(error), parent=self.root)
+      self.show_error("Couldn't open settings", error)
       return
     self.settings_path = Path(path)
     self.password.set("")
-    self.status.set(f"Opened {self.settings_path.name}.")
+    self.set_message(self.status, f"Opened {self.settings_path.name}.")
 
   def save(self):
     try:
       config = self.config()
       text = dump_text(config, allow_empty_courses=True)
     except StopRun as error:
-      messagebox.showerror("Check your settings", str(error), parent=self.root)
+      self.show_error("Check your settings", error)
       return
     current = self.settings_path or Path("preferences.txt")
     filename = filedialog.asksaveasfilename(
       parent=self.root,
       defaultextension=".txt",
-      filetypes=[("Text settings", "*.txt")],
+      filetypes=[(self.t("Text settings"), "*.txt")],
       initialdir=str(current.parent.resolve()),
       initialfile=current.with_suffix(".txt").name,
     )
@@ -320,17 +401,15 @@ class App:
       return
     path = Path(filename)
     if path.suffix.lower() != ".txt":
-      messagebox.showerror("Couldn't save settings", "Choose a .txt filename.", parent=self.root)
+      self.show_error("Couldn't save settings", "Choose a .txt filename.")
       return
     try:
       atomic_write(path, text, private_parent=False)
     except Exception as error:
-      messagebox.showerror(
-        "Couldn't save settings", f"Saving failed ({type(error).__name__}).", parent=self.root
-      )
+      self.show_error("Couldn't save settings", f"Saving failed ({type(error).__name__}).")
       return
     self.settings_path = path
-    self.status.set(f"Saved {path.name}.")
+    self.set_message(self.status, f"Saved {path.name}.")
 
   def set_running(self, running):
     for control in (
@@ -356,19 +435,17 @@ class App:
           raise StopRun("Enter your student ID to fetch the course list.")
         config = {"username": student, "semester": self.values["Semester"].get().strip(), "courses": []}
     except StopRun as error:
-      messagebox.showerror("Check your settings", str(error), parent=self.root)
+      self.show_error("Check your settings", error)
       return
     password = self.password.get() or os.environ.get("ACADEMY_PASSWORD")
     if not password:
-      self.status.set("Enter your school password to start a run.")
+      self.set_message(self.status, "Enter your school password to start a run.")
       self.password_entry.focus_set()
       return
     if submit:
       opening = datetime.fromisoformat(config["opening"])
       if now() >= opening + timedelta(minutes=config["window_minutes"]):
-        messagebox.showerror(
-          "Registration window ended", "Check the opening time in your settings.", parent=self.root
-        )
+        self.show_error("Registration window ended", "Check the opening time in your settings.")
         return
       when = opening.astimezone(hanoi_timezone()).strftime("%Y-%m-%d %H:%M:%S")
       targets = ", ".join(course["code"] for course in config["courses"])
@@ -377,10 +454,9 @@ class App:
         text += (
           "\n\nThe window is already open according to your settings. The tool may submit right away."
         )
-      if not messagebox.askyesno(
+      if not self.confirm(
         "Schedule registration",
         text + "\n\nKeep this window open and your computer awake.",
-        parent=self.root,
       ):
         return
     self.password.set("")
@@ -390,7 +466,9 @@ class App:
     self.week.set("")
     self.draw_week()
     self.results.delete(*self.results.get_children())
-    self.metrics.set("Signing in to fetch the course list…")
+    self.result_statuses.clear()
+    self.set_message(self.metrics, "Signing in to fetch the course list...")
+    self.log_lines.clear()
     self.log.configure(state="normal")
     self.log.delete("1.0", "end")
     self.log.configure(state="disabled")
@@ -409,21 +487,19 @@ class App:
     )
     self.job = BrowserJob(self.events)
     self.set_running(True)
-    self.status.set("Opening the portal…")
+    self.set_message(self.status, "Opening the portal...")
     self.job.start(args, config)
 
   def cancel(self):
     if self.job is not None:
       self.cancel_button.configure(state="disabled")
-      self.status.set("Cancelling and closing the browser…")
+      self.set_message(self.status, "Cancelling and closing the browser...")
       self.job.cancel()
 
   def close(self):
     if self.job is None:
       self.root.destroy()
-    elif messagebox.askyesno(
-      "Close Academy Registration", "Cancel the active run and close this window?", parent=self.root
-    ):
+    elif self.confirm("Close Academy Registration", "Cancel the active run and close this window?"):
       self.close_after_run = True
       self.cancel()
 
@@ -436,10 +512,9 @@ class App:
       line and not line.startswith("#") for line in map(str.strip, current.splitlines())
     )
     if current != body and has_choices:
-      if not messagebox.askyesno(
+      if not self.confirm(
         "Replace course choices",
         "Replace the course choices in the editor with the suggested groups?",
-        parent=self.root,
       ):
         return
     self.set_course_text(body)
@@ -447,9 +522,13 @@ class App:
       self.values["Semester"].set(self.suggestion["semester"])
     self.courses.focus_set()
     if self.values["Opens"].get().strip():
-      self.status.set("Suggested groups copied. Review them before scheduling registration.")
+      self.set_message(
+        self.status, "Suggested groups copied. Review them before scheduling registration."
+      )
     else:
-      self.status.set("Suggested groups copied. Enter the opening time before scheduling registration.")
+      self.set_message(
+        self.status, "Suggested groups copied. Enter the opening time before scheduling registration."
+      )
 
   def drain_events(self):
     try:
@@ -458,9 +537,10 @@ class App:
         if kind == "result":
           self.show_results(*payload)
         else:
-          self.status.set(payload)
+          self.set_message(self.status, payload)
+          self.log_lines.append(payload)
           self.log.configure(state="normal")
-          self.log.insert("end", payload + "\n")
+          self.log.insert("end", self.t(payload) + "\n")
           self.log.see("end")
           self.log.configure(state="disabled")
           if kind == "finished":
@@ -502,8 +582,9 @@ class App:
       fixed = [c for c in courses if c.checked or (c.code, c.group) in existing]
       proposed = planned
       summary = f"{len(existing)} registered · {len(planned)} planned"
-    self.metrics.set(summary)
+    self.set_message(self.metrics, summary)
     self.results.delete(*self.results.get_children())
+    self.result_statuses.clear()
     for course in (*fixed, *proposed):
       identity = course.code, course.group
       if identity in existing:
@@ -512,7 +593,10 @@ class App:
         status = "Already checked"
       else:
         status = "Suggested" if suggestion is not None else "Planned"
-      self.results.insert("", "end", values=(course.key, names.get(identity, ""), status))
+      item = self.results.insert(
+        "", "end", values=(course.key, names.get(identity, ""), self.t(status))
+      )
+      self.result_statuses[item] = status
     self.weeks = week_grid((*fixed, *proposed), names)
     self.week.configure(values=[week.isoformat() for week in self.weeks])
     if self.weeks:
@@ -541,12 +625,23 @@ def main():
     return 2
 
   root.withdraw()
-  root.title("Academy Registration")
+  locale = Locale()
+  root.title(locale("Academy Registration"))
   splash = ttk.Frame(root, padding=20)
   notice = ttk.Label(splash, width=55, anchor="w")
   notice.pack(fill="x")
   progress = ttk.Progressbar(splash, mode="indeterminate")
   progress.pack(fill="x", pady=(10, 0))
+  language = ttk.Label(splash, text=locale("Language"))
+  language.pack(anchor="w", pady=(8, 0))
+  stage = ""
+
+  def update_language():
+    root.title(locale("Academy Registration"))
+    language.configure(text=locale("Language"))
+    notice.configure(text=locale(stage))
+
+  language_picker(splash, locale, update_language).pack(anchor="w")
   events = Queue()
   result = 0
 
@@ -559,7 +654,7 @@ def main():
       events.put(None)
 
   def poll_install():
-    nonlocal result
+    nonlocal result, stage
     while True:
       try:
         event = events.get_nowait()
@@ -567,7 +662,8 @@ def main():
         root.after(40, poll_install)
         return
       if isinstance(event, str):
-        notice.configure(text=event)
+        stage = event
+        notice.configure(text=locale(stage))
         if not splash.winfo_manager():
           splash.pack(fill="both", expand=True)
           root.deiconify()
@@ -576,12 +672,12 @@ def main():
       progress.stop()
       splash.destroy()
       if event is None:
-        App(root)
+        App(root, locale)
         root.deiconify()
       else:
         detail = str(event) if isinstance(event, StopRun) else "Couldn't check the Python packages."
         result = 2
-        messagebox.showerror("Academy Registration", detail, parent=root)
+        messagebox.showerror(locale("Academy Registration"), locale(detail), parent=root)
         root.destroy()
       return
 

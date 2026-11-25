@@ -11,11 +11,11 @@ from .core import StopRun
 
 REQUIREMENT = re.compile(r'([\w-]+)(?:==(\d+(?:\.\d+)*)|>=(\d+))?(?:; sys_platform == "([^"]+)")?')
 PIP_STAGES = (
-  (("Collecting ", "Obtaining ", "Getting requirements "), "Finding packages…"),
-  (("Downloading ",), "Downloading packages…"),
-  (("Using cached ",), "Reading cached packages…"),
-  (("Preparing metadata", "Building wheel"), "Preparing packages…"),
-  (("Installing build dependencies", "Installing collected packages"), "Installing packages…"),
+  (("Collecting ", "Obtaining ", "Getting requirements "), "Finding packages..."),
+  (("Downloading ",), "Downloading packages..."),
+  (("Using cached ",), "Reading cached packages..."),
+  (("Preparing metadata", "Building wheel"), "Preparing packages..."),
+  (("Installing build dependencies", "Installing collected packages"), "Installing packages..."),
 )
 
 

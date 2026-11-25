@@ -159,7 +159,6 @@ class Journal:
     try:
       self.lock = open_account_lock(folder / (label + ".lock"))
       if opening is None:
-        # A preview shares the account lock without reading or changing submission state.
         self.path, self.data = None, {}
         return
       self.path = folder / (label + "-" + datetime.fromisoformat(opening).strftime("%Y%m%d") + ".json")

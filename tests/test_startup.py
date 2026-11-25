@@ -83,7 +83,7 @@ class StartupTests(unittest.TestCase):
       launch.return_value.__enter__.return_value = process
       with self.assertRaises(subprocess.CalledProcessError):
         startup.install_with_progress([sys.executable, "-m", "pip"], messages.append)
-    self.assertEqual(messages, ["Finding packages…", "Downloading packages…", "Installing packages…"])
+    self.assertEqual(messages, ["Finding packages...", "Downloading packages...", "Installing packages..."])
     self.assertEqual(launch.call_args.kwargs["stderr"], subprocess.STDOUT)
 
   def test_failed_install_is_shown_in_desktop_window(self):
@@ -109,7 +109,7 @@ class StartupTests(unittest.TestCase):
   def test_desktop_updates_the_progress_screen_before_opening_the_app(self):
     def install(announce, *, on_progress):
       announce("Starting installation.")
-      on_progress("Downloading packages…")
+      on_progress("Downloading packages...")
 
     with (
       patch.object(gui, "tk") as tk,
@@ -124,7 +124,9 @@ class StartupTests(unittest.TestCase):
       ttk.Frame.return_value.winfo_manager.side_effect = ["", "pack"]
       self.assertEqual(gui.main(), 0)
     messages = [call.kwargs["text"] for call in ttk.Label.return_value.configure.call_args_list]
-    self.assertEqual(messages, ["Starting installation.", "Downloading packages…"])
+    self.assertEqual(messages, ["Starting installation.", "Downloading packages..."])
     ttk.Progressbar.return_value.start.assert_called_once()
     ttk.Progressbar.return_value.stop.assert_called_once()
-    app.assert_called_once_with(root)
+    app.assert_called_once()
+    self.assertIs(app.call_args.args[0], root)
+    self.assertEqual(app.call_args.args[1].language, "English")

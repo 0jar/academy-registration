@@ -5,14 +5,18 @@ import os
 import sys
 import tempfile
 import unittest
+from argparse import Namespace
 from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 from platform_checks import assert_private
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import academy_registration as academy
+from academy_registration import cli
 from academy_registration.browsers import launch_browser
 
 
@@ -249,12 +253,18 @@ if(data.mode==='scroll'){
 }
 const app=document.getElementById('app');
 function render(){
- if(data.mode==='redirect'&&!location.pathname.includes('/login')&&!sessionStorage.getItem('fixture-auth')){
+ if(['redirect','authenticated-suggestion'].includes(data.mode)&&!location.pathname.includes('/login')&&!sessionStorage.getItem('fixture-auth')){
   app.textContent='Loading';setTimeout(()=>location.href='/login/',150);return;
  }
  if(location.pathname.includes('/login')){
   app.innerHTML='<form><label>Tên đăng nhập<input name="username"></label><label>Mật khẩu<input type="password"></label><button>Đăng nhập</button></form>';
-  app.querySelector('form').onsubmit=e=>{e.preventDefault();sessionStorage.setItem('fixture-auth','yes');location.href='/course-registration/'};return;
+  app.querySelector('form').onsubmit=e=>{
+    e.preventDefault();
+    if(data.mode==='authenticated-suggestion' &&
+       (e.target.querySelector('[name=username]').value!==data.username ||
+        e.target.querySelector('[type=password]').value!=='fixture-preview-password')) return;
+    sessionStorage.setItem('fixture-auth','yes');location.href='/course-registration/'
+  };return;
  }
  app.innerHTML='<header>'+data.username+'</header><h2>ĐĂNG KÝ MÔN HỌC-'+data.semester+'</h2>';
  for(const kind of ['open','registered']){
@@ -388,6 +398,40 @@ class BrowserTests(unittest.IsolatedAsyncioTestCase):
     await self.site.ready()
     self.assertEqual(self.site.stage, "login and student identifier verified")
     self.assertEqual(await self.page.evaluate("fixture.clicks"), {})
+
+  async def test_suggestion_with_only_login_fetches_authenticated_timetable(self):
+    self.mode = "authenticated-suggestion"
+    folder = Path(self.temp.name)
+    evidence = folder / "preview"
+    evidence.mkdir()
+    args = Namespace(
+      submit=False,
+      suggest="days",
+      include=["IE.014.02"],
+      exclude=[],
+      catalog=False,
+      state_dir=folder / "state",
+      evidence_dir=evidence,
+      headless=True,
+      browser_executable=None,
+      password="fixture-preview-password",
+    )
+    browser = SimpleNamespace(new_page=AsyncMock(return_value=self.page), close=AsyncMock())
+    config = {"username": self.config["username"], "semester": "", "courses": []}
+    with (
+      patch.object(cli, "launch_browser", return_value=browser),
+      patch.dict(os.environ, {"ACADEMY_PASSWORD": "wrong-environment-password"}),
+    ):
+      await asyncio.wait_for(cli._run_browser(args, config), timeout=12)
+    proposal = (evidence / "suggested-schedule.txt").read_text(encoding="utf-8")
+    self.assertIn("IE.014.02/", proposal)
+    self.assertNotIn("IE.068.02/", proposal)
+    self.assertEqual(await self.page.evaluate("sessionStorage.getItem('fixture-auth')"), "yes")
+    self.assertEqual(await self.page.evaluate("fixture.clicks"), {})
+    self.assertEqual(list((folder / "state").glob("*.json")), [])
+    report = json.loads((evidence / "report.json").read_text(encoding="utf-8"))
+    self.assertIn(self.config["semester"], report["semester"])
+    self.assertEqual(self.external, [])
 
   async def test_refresh_recovers_login_redirect_without_selecting_courses(self):
     await self.use_mode("expired-on-refresh")

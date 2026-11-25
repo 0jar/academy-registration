@@ -140,12 +140,15 @@ class DesktopGuiTests(unittest.TestCase):
       with patch.object(self.gui.filedialog, "asksaveasfilename", return_value=str(path)):
         self.app.save()
       self.assertNotIn("fixture-secret", path.read_text(encoding="utf-8"))
+    self.app.values["Semester"].set("")
+    self.app.values["Opens"].set("")
     with (
       patch.dict(os.environ, {"ACADEMY_PASSWORD": "fallback"}),
       patch.object(self.gui, "BrowserJob") as worker,
     ):
       self.app.start(False)
-      args, _ = worker.return_value.start.call_args.args
+      args, config = worker.return_value.start.call_args.args
+      self.assertEqual(config, {"username": "fixture", "semester": "", "courses": []})
       self.assertEqual(args.password, " fixture-secret ")
       self.assertEqual(self.app.password.get(), "")
 

@@ -137,10 +137,12 @@ async def _run_browser(args, config):
     from playwright.async_api import async_playwright
   except ImportError:
     raise StopRun("Run python -m pip install -r requirements.txt first.") from None
-  opening = datetime.fromisoformat(config["opening"])
-  if args.submit and now() >= opening + timedelta(minutes=config["window_minutes"]):
-    raise StopRun("This registration window has ended. Check the opening time in your settings.")
-  with Journal(args.state_dir, config["username"], config["opening"]) as journal:
+  if args.submit:
+    opening = datetime.fromisoformat(config["opening"])
+    if now() >= opening + timedelta(minutes=config["window_minutes"]):
+      raise StopRun("This registration window has ended. Check the opening time in your settings.")
+  journal_date = None if args.suggest else config["opening"]
+  with Journal(args.state_dir, config["username"], journal_date) as journal:
     async with async_playwright() as playwright:
       browser = await launch_browser(
         playwright.chromium, headless=args.headless, executable=args.browser_executable

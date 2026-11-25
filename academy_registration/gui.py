@@ -14,7 +14,7 @@ except ImportError:
   tk = None
 
 from .cli import HANOI
-from .core import StopRun, load_config, now
+from .core import StopRun, identifier, load_config, now
 from .files import atomic_write
 from .gui_support import BrowserJob, proposal_preferences, subject_codes, week_grid
 from .preferences import dump_text, parse_text
@@ -66,7 +66,7 @@ class App:
     self.build_settings(settings)
     self.build_results(results)
     self.status = tk.StringVar(
-      value="Load settings or enter your student ID, semester, and opening time."
+      value="Enter your student ID and password to suggest a schedule, or open a settings file."
     )
     ttk.Label(root, textvariable=self.status, anchor="w").pack(fill="x", padx=16, pady=(0, 10))
 
@@ -261,7 +261,13 @@ class App:
     if self.job is not None:
       return
     try:
-      config = self.config(require_courses=submit)
+      if submit:
+        config = self.config(require_courses=True)
+      else:
+        student = self.values["Student"].get().strip()
+        if not identifier(student):
+          raise StopRun("Enter your student ID to fetch the course list.")
+        config = {"username": student, "semester": self.values["Semester"].get().strip(), "courses": []}
     except StopRun as error:
       messagebox.showerror("Check your settings", str(error), parent=self.root)
       return
@@ -297,7 +303,7 @@ class App:
     self.week.set("")
     self.draw_week()
     self.results.delete(*self.results.get_children())
-    self.metrics.set("Reading the course list…")
+    self.metrics.set("Signing in to fetch the course list…")
     self.log.configure(state="normal")
     self.log.delete("1.0", "end")
     self.log.configure(state="disabled")
@@ -386,6 +392,8 @@ class App:
         f"Longest stretch: {suggestion.longest_stretch} periods · "
         f"{suggestion.long_stretches} blocks of three"
       )
+      if raw.get("semester"):
+        summary = raw["semester"] + "\n" + summary
       if not suggestion.complete:
         summary += "\nSearch limit reached. Showing the best schedule found."
       if suggestion.unreadable:

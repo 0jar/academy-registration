@@ -175,9 +175,10 @@ class Site:
     if urlsplit(self.page.url).path.rstrip("/") != "/course-registration":
       raise StopRun("Open the school’s registration page to continue.")
     await self.page.get_by_role("table").first.wait_for(timeout=30000)
-    await self.page.get_by_role(
-      "heading", name=re.compile(re.escape(self.config["semester"]), re.I)
-    ).wait_for(timeout=30000)
+    if self.config["semester"]:
+      await self.page.get_by_role(
+        "heading", name=re.compile(re.escape(self.config["semester"]), re.I)
+      ).wait_for(timeout=30000)
     await self.verify_student()
     self.stage = "login and student identifier verified"
     LOG.info("Signed in. Your registration page is open.")
@@ -189,7 +190,10 @@ class Site:
     raw = await self.page.evaluate(SNAPSHOT)
     if set(raw["found"]) != {"open", "registered"} or len(raw["found"]) != 2:
       raise StopRun("The course tables haven't loaded or the portal changed their layout.")
-    if normalize(self.config["semester"]).casefold() not in raw["semester"].casefold():
+    if (
+      not raw["semester"]
+      or normalize(self.config["semester"]).casefold() not in raw["semester"].casefold()
+    ):
       raise StopRun("The semester on the portal doesn't match your settings.")
     if raw["activeFilters"]:
       raise StopRun("Clear the search filters in both tables so I can see every course.")

@@ -142,7 +142,7 @@ def open_account_lock(path):
 class Journal:
   """Keep only one run per account and remember which submission is pending."""
 
-  def __init__(self, folder, username, opening):
+  def __init__(self, folder, username, opening=None):
     folder = private_directory(folder)
     label = re.sub(r"[^A-Za-z0-9_-]", "_", username)
     if os.name == "nt" and re.fullmatch(r"CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9]", label, re.I):
@@ -150,6 +150,10 @@ class Journal:
     self.lock = None
     try:
       self.lock = open_account_lock(folder / (label + ".lock"))
+      if opening is None:
+        # A preview shares the account lock without reading or changing submission state.
+        self.path, self.data = None, {}
+        return
       self.path = folder / (label + "-" + datetime.fromisoformat(opening).strftime("%Y%m%d") + ".json")
       for prior in folder.glob(label + "-*.json"):
         if prior != self.path and read_state(prior).get("pending"):
@@ -167,6 +171,8 @@ class Journal:
       raise
 
   def save(self):
+    if self.path is None:
+      raise RuntimeError("A schedule preview cannot save submission state.")
     write_json(self.path, self.data)
 
   def close(self):
